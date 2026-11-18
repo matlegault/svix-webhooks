@@ -1,0 +1,100 @@
+---
+title: "Applications & Endpoints"
+---
+
+Applications and endpoints are the two core building blocks you use to route webhooks to your customers.
+
+## What is an application?
+
+An application is a container that represents a single entity in your system - typically one of your customers. All webhook messages you send and all destination URLs you register live inside an application.
+
+When you create an application, you give it a name and optionally a unique identifier (`uid`). You can also attach arbitrary metadata to it.
+
+```json
+POST /api/v1/app
+{
+  "name": "My first application",
+  "uid": "customer-1234",
+  "metadata": {}
+}
+```
+
+## One application per customer
+
+The standard pattern is to create one application per customer when they sign up for your service. Every message you send and every endpoint your customer registers belongs to that application. This keeps each customer's webhook activity isolated and makes it straightforward to manage their configuration independently.
+
+You can also create an application inline when sending a message. If the application ID or UID you specify in the path already exists, the inline `application` field is ignored.
+
+## What is an endpoint?
+
+An endpoint is a destination URL that Svix delivers webhook messages to. Endpoints belong to an application, and a single application can have multiple endpoints.
+
+You create an endpoint by posting to the application's endpoint resource:
+
+```json
+POST /api/v1/app/{app_id}/endpoint
+{
+  "url": "https://example.com/webhook/",
+  "description": "An example endpoint name"
+}
+```
+
+Endpoint URLs must use `http` or `https` schemes.
+
+## Endpoint configuration options
+
+When you create or update an endpoint, you can set the following fields:
+
+- **`url`** - The destination URL. Must be `http` or `https`.
+- **`description`** - A human-readable label for the endpoint.
+- **`uid`** - An optional unique identifier you assign to the endpoint.
+- **`throttleRate`** - Maximum messages per second to send to this endpoint. Outgoing messages are throttled to this rate. Must be at least 1 if set.
+- **`disabled`** - Set to `true` to pause delivery to this endpoint. Defaults to `false`.
+- **`filterTypes`** - A list of event type names this endpoint should receive. If omitted, the endpoint receives all event types.
+- **`channels`** - A list of channels to filter by. Must have between 1 and 10 items if set.
+- **`metadata`** - Arbitrary key-value data you can attach to the endpoint. (needs confirmation)
+
+## Filtering by event type
+
+You can restrict an endpoint to only receive specific event types by setting `filterTypes`. The list must contain at least one item.
+
+```json
+{
+  "url": "https://example.com/webhook/",
+  "filterTypes": ["user.signup", "user.deleted"]
+}
+```
+
+If you set `filterTypes` to an empty array, the API returns a validation error. Leave the field out entirely to receive all event types.
+
+You can also filter by **channels**. Channels are free-form string identifiers set on messages (up to 5 per message) and on endpoints (up to 10 per endpoint). An endpoint only receives a message if they share at least one channel.
+
+```json
+{
+  "url": "https://example.com/webhook/",
+  "channels": ["project_123", "group_2"]
+}
+```
+
+## Endpoint rate limits and headers
+
+**Rate limiting:** Use `throttleRate` to cap the number of messages per second delivered to an endpoint. The field `rateLimit` is deprecated; use `throttleRate` instead.
+
+**Custom headers:** You can configure custom HTTP headers that Svix will include on every delivery request to an endpoint. Header management is handled through the endpoint's headers sub-resource.
+
+## Listing and managing applications and endpoints
+
+The REST API exposes standard CRUD operations for both resources:
+
+| Operation | Path |
+|---|---|
+| Create application | `POST /api/v1/app` |
+| Get application | `GET /api/v1/app/{app_id}` |
+| List applications | `GET /api/v1/app` |
+| Delete application | `DELETE /api/v1/app/{app_id}` |
+| Create endpoint | `POST /api/v1/app/{app_id}/endpoint` |
+| Get endpoint | `GET /api/v1/app/{app_id}/endpoint/{endpoint_id}` |
+| List endpoints | `GET /api/v1/app/{app_id}/endpoint` |
+| Delete endpoint | `DELETE /api/v1/app/{app_id}/endpoint/{endpoint_id}` |
+
+You can refer to both applications and endpoints by either their auto-generated ID or the `uid` you assigned when creating them.

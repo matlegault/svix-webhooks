@@ -1,0 +1,194 @@
+---
+title: "Integrating AutoConfig"
+---
+
+AutoConfig tokens let your customers register webhook endpoints or subscribe to sinks without calling your API directly.
+
+## Overview of the AutoConfig flow
+
+AutoConfig removes the need for your customers to interact with your Svix API credentials. Instead, you generate a short-lived token scoped to a single application, hand it to the customer, and they use it to register their own endpoint or subscribe to a streaming sink. The token encodes everything Svix needs to associate the registration with the right application. (needs confirmation)
+
+There are two token formats:
+
+- **v2 tokens** (prefix `auto_v2_`) — the current format. They support both endpoint registration and sink subscriptions via `AutoConfigConsumer`. `python/svix/api/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+- **v1 tokens** (prefix `auto_v1_`) — deprecated endpoint-based format, still supported for backwards compatibility. `kotlin/lib/src/main/kotlin/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+## Generating a v2 AutoConfig token
+
+You generate a token server-side using your Svix API credentials. The token is scoped to a specific application. Pass it to your customer's client — never expose your main API token. (needs confirmation)
+
+The `AutoConfig` class is available in every official SDK. `go/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+```python
+from svix.api import Svix, SvixOptions
+
+svix = Svix("YOUR_API_KEY")
+
+# Generate a v2 AutoConfig token for a specific application
+token = svix.authentication.app_portal_access(
+    app_id="app_your_application_id",
+    app_portal_access_in={}
+)
+```
+
+`python/svix/api/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+## Embedding the consumer widget or SDK call
+
+Once you have a token, pass it to the customer's environment. On the customer side, instantiate `AutoConfig` with the token and the endpoint URL they want to register. (needs confirmation)
+
+**Go**
+
+```go
+import svix "github.com/svix/svix-webhooks/v2/go"
+
+ac := svix.NewAutoConfig(token, endpointURL)
+out, err := ac.Do(ctx)
+```
+
+`go/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+**TypeScript**
+
+```typescript
+import { AutoConfig } from "svix";
+
+const ac = new AutoConfig(token, endpointUrl);
+const out = await ac.do_();
+```
+
+`javascript/src/api/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+**Python**
+
+```python
+from svix.api import AutoConfig
+
+ac = AutoConfig(token, endpoint_url)
+out = ac.do_()
+```
+
+`python/svix/api/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+**Java**
+
+```java
+import com.svix.api.AutoConfig;
+
+AutoConfig ac = new AutoConfig(token, endpointUrl);
+AutoConfigOut out = ac.do_();
+```
+
+`java/lib/src/main/java/com/svix/api/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+**Kotlin**
+
+```kotlin
+import com.svix.kotlin.AutoConfig
+
+val ac = AutoConfig(token, endpointUrl)
+val out = ac.do_()
+```
+
+`kotlin/lib/src/main/kotlin/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+**Rust**
+
+```rust
+use svix::api::AutoConfig;
+
+let ac = AutoConfig::new(token, endpoint_url);
+let out = ac.do_().await?;
+```
+
+`rust/src/api/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+## AutoConfigConsumer: subscribing to a sink
+
+`AutoConfigConsumer` is the v2 counterpart for streaming sink subscriptions. Instead of an endpoint URL, you pass a `sinkIn` object describing the destination. (needs confirmation)
+
+**Go**
+
+```go
+consumer := svix.NewAutoConfigConsumer(token, sinkIn)
+out, err := consumer.Do(ctx)
+```
+
+`go/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+**TypeScript**
+
+```typescript
+import { AutoConfigConsumer } from "svix";
+
+const consumer = new AutoConfigConsumer(token, sinkIn);
+const out = await consumer.do_();
+```
+
+`javascript/src/api/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+**Python**
+
+```python
+from svix.api import AutoConfigConsumer
+
+consumer = AutoConfigConsumer(token, sink_in)
+out = consumer.do_()
+```
+
+`python/svix/api/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+**Java**
+
+```java
+import com.svix.api.AutoConfigConsumer;
+
+AutoConfigConsumer consumer = new AutoConfigConsumer(token, sinkIn);
+AutoConfigOut out = consumer.do_();
+```
+
+`java/lib/src/main/java/com/svix/api/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+**Kotlin**
+
+```kotlin
+import com.svix.kotlin.AutoConfigConsumer
+
+val consumer = AutoConfigConsumer(token, sinkIn)
+val out = consumer.do_()
+```
+
+`kotlin/lib/src/main/kotlin/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+**Rust**
+
+```rust
+use svix::api::AutoConfigConsumer;
+
+let consumer = AutoConfigConsumer::new(token, sink_in);
+let out = consumer.do_().await?;
+```
+
+`rust/src/api/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+## Handling v1 (deprecated) tokens
+
+v1 tokens (prefix `auto_v1_`) only support endpoint registration, not sink subscriptions. The SDKs detect the token prefix automatically and route to the correct code path, so you do not need to branch on the prefix yourself. `kotlin/lib/src/main/kotlin/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+If you are still issuing v1 tokens, migrate to v2. v1 support exists for backwards compatibility and may be removed in a future release. `python/svix/api/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+## Revoking tokens
+
+AutoConfig tokens are short-lived and scoped to a single application. To prevent a token from being used after you issue it, revoke access through the Svix Authentication API using your server-side credentials. `java/lib/src/main/java/com/svix/api/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+Because tokens are application-scoped, a compromised token cannot be used to register endpoints on other applications. `go/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+## Testing the flow end-to-end
+
+1. On your server, generate a v2 AutoConfig token for a test application using your API key. (needs confirmation)
+2. Pass the token to a test client. (needs confirmation)
+3. On the client, call `AutoConfig` with the token and a test endpoint URL (for example, a local server or a service like webhook.site). (needs confirmation)
+4. Confirm the endpoint appears in the Svix dashboard or via the Endpoint list API for that application. (needs confirmation)
+5. Send a test message to the application and verify delivery to the registered endpoint. (needs confirmation)
+
+`go/`@`124218287bb291261bc7227b1e218be45d59dd9c`, `python/svix/api/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)

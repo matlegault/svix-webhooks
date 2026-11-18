@@ -1,0 +1,54 @@
+---
+title: "Local Webhook Forwarding (listen)"
+---
+
+Use `svix listen` to forward webhooks from the Svix relay to a local server during development.
+
+## How the relay works
+
+When you run `svix listen`, the CLI connects to the Svix relay service at `relay.svix.com` and opens a persistent tunnel. Svix delivers webhooks to the relay, which then forwards each request to your local server over that tunnel. This means your local server does not need to be publicly reachable — the relay handles the inbound connection for you.
+
+## Starting the listener
+
+Run the command with the local URL you want to receive forwarded requests:
+
+```sh
+svix listen http://localhost:8080/webhook
+```
+
+The CLI prints a relay URL (hosted on `relay.svix.com`) that you can use as an endpoint destination in Svix. Keep the process running while you test — stopping it closes the tunnel.
+
+## Pointing an endpoint at the relay URL
+
+Once the listener is running and you have the relay URL, create or update a Svix endpoint to point at it. You can do this with the CLI (needs confirmation):
+
+```sh
+svix endpoint create <app-id> '{"url": "https://relay.svix.com/api/v1/relay/<your-token>/", "version": 1}'
+```
+
+Or update an existing endpoint:
+
+```sh
+svix endpoint update <app-id> <endpoint-id> '{"url": "https://relay.svix.com/api/v1/relay/<your-token>/"}'
+```
+
+Replace the relay URL with the one printed by `svix listen`. Any message Svix delivers to that endpoint will be forwarded to your local server.
+
+## Inspecting forwarded requests
+
+Each forwarded request arrives at your local server exactly as Svix sent it, including all headers such as `svix-id`, `svix-timestamp`, and `svix-signature`. You can verify the webhook signature on your local server the same way you would in production, using the endpoint's signing secret.
+
+To review delivery attempts and their response codes after the fact, use the `message-attempt` commands:
+
+```sh
+svix message-attempt list-by-endpoint <app-id> <endpoint-id>
+```
+
+This shows status, HTTP status code, and timing for each attempt.
+
+## Limitations and security considerations
+
+- The relay at `relay.svix.com` is an external service. Traffic between the relay and your machine travels over the open internet, so run your local server over HTTPS or trust your network accordingly.
+- The relay URL is tied to your CLI session. Anyone who obtains the relay URL can send requests to your local server for as long as the listener is running. Stop the listener when you are done.
+- `svix listen` is intended for local development and testing, not for production traffic.
+- CLI configuration, including your authentication token, is stored at `~/.config/svix/config.toml` and can be overridden with `SVIX_*` environment variables.

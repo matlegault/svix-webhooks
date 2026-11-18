@@ -1,0 +1,145 @@
+---
+title: "Webhook Signatures"
+---
+
+Svix signs every webhook payload so your receivers can verify that a message is authentic and has not been tampered with.
+
+## Why signatures matter
+
+When your server receives a webhook, you have no built-in way to know whether the request came from Svix or from an attacker replaying an old request. Svix solves this by attaching a cryptographic signature to every delivery. Your receiver recomputes the signature from the raw payload and the request headers, then compares it to the one Svix sent. If they match, the payload is genuine. (needs confirmation)
+
+## Symmetric signing with HMAC-SHA256
+
+By default, Svix signs payloads using HMAC-SHA256. Each endpoint has its own signing secret. The secret is a base64-encoded key, prefixed with `whsec_`. (needs confirmation)
+
+The signed string is constructed as:
+
+```
+{msg_id}.{timestamp}.{payload}
+```
+
+where `msg_id` is the unique message ID, `timestamp` is a Unix epoch integer, and `payload` is the raw request body.
+
+The resulting signature is base64-encoded and prefixed with the version tag `v1` (needs confirmation):
+
+```
+v1,<base64-encoded-hmac-sha256>
+```
+
+
+
+To verify a payload, instantiate a `Webhook` with the endpoint secret and call `Verify`. Here are examples across the official SDKs (needs confirmation):
+
+**Go**
+```go
+wh, err := svix.NewWebhook("whsec_YOUR_SIGNING_SECRET")
+if err != nil {
+    // handle error
+}
+err = wh.Verify(payload, headers)
+```
+
+
+**Python**
+```python
+from svix.webhooks import Webhook
+
+wh = Webhook("whsec_YOUR_SIGNING_SECRET")
+wh.verify(payload, headers)
+```
+
+
+**TypeScript/JavaScript**
+```typescript
+import { Webhook } from "svix";
+
+const wh = new Webhook("whsec_YOUR_SIGNING_SECRET");
+wh.verify(payload, headers);
+```
+
+
+**Rust**
+```rust
+use svix::webhooks::Webhook;
+
+let wh = Webhook::new("whsec_YOUR_SIGNING_SECRET")?;
+wh.verify(payload, &headers)?;
+```
+
+
+**C#**
+```csharp
+var wh = new Webhook("whsec_YOUR_SIGNING_SECRET");
+wh.Verify(payload, headers);
+```
+
+
+**Ruby**
+```ruby
+wh = Svix::Webhook.new("whsec_YOUR_SIGNING_SECRET")
+wh.verify(payload, headers)
+```
+
+
+**Java**
+```java
+Webhook wh = new Webhook("whsec_YOUR_SIGNING_SECRET");
+wh.verify(payload, headers);
+```
+
+
+**Kotlin**
+```kotlin
+val wh = Webhook("whsec_YOUR_SIGNING_SECRET")
+wh.verify(payload, headers)
+```
+
+
+**PHP**
+```php
+$wh = new \Svix\Webhook("whsec_YOUR_SIGNING_SECRET");
+$wh->verify($payload, $headers);
+```
+
+
+## Asymmetric signing overview
+
+Svix also supports asymmetric signing keys. With asymmetric signing, Svix signs the payload with a private key and your receiver verifies it with the corresponding public key. This means the signing secret you distribute to receivers cannot be used to forge signatures.
+
+The verification API is the same across all SDKs: you still call `Verify` with the payload and headers. The difference is in the key material you provide when constructing the `Webhook` instance. (needs confirmation)
+
+## Signature header format
+
+Svix sends three headers with every webhook delivery. The SDKs accept both the branded `svix-*` names and the unbranded `webhook-*` names interchangeably. (needs confirmation)
+
+| Branded header | Unbranded header | Content |
+|---|---|---|
+| `svix-id` | `webhook-id` | Unique message ID |
+| `svix-timestamp` | `webhook-timestamp` | Unix epoch timestamp (integer) |
+| `svix-signature` | `webhook-signature` | One or more space-separated versioned signatures |
+
+
+
+The `svix-signature` (or `webhook-signature`) header may contain multiple space-separated signatures, each in the form `v1,<base64>`. This happens during secret rotation: Svix sends signatures for both the old and new secret so you can rotate without dropping deliveries. Your verifier only needs one of them to match.
+
+The Python SDK normalizes headers by mapping `svix-*` names onto the `webhook-*` names before passing them to the underlying verifier.
+
+## Timestamp tolerance and replay protection
+
+The `svix-timestamp` header contains the Unix epoch time at which Svix sent the message. The SDKs reject messages whose timestamp falls outside a tolerance window of **5 minutes** in either direction.
+
+This protects you from replay attacks: an attacker who captures a valid webhook cannot re-deliver it more than 5 minutes later.
+
+The Go SDK exposes a `VerifyIgnoringTimestamp` method if you need to bypass this check, but this is not recommended for production use. The Rust SDK has an equivalent `verify_ignoring_timestamp` method.
+
+The C# SDK enforces the same 5-minute tolerance (`TOLERANCE_IN_SECONDS = 60 * 5`).
+
+## Choosing between symmetric and asymmetric
+
+Use **symmetric (HMAC-SHA256)** when:
+- You control both the sender and receiver, or you trust your receivers to keep the secret confidential.
+
+Use **asymmetric** when:
+- You distribute the verification key publicly, or you want to guarantee that only Svix (holding the private key) can produce valid signatures.
+
+In both cases the verification call in your receiver code is identical: construct a `Webhook` with the appropriate key and call `Verify` with the raw payload bytes and the request headers.

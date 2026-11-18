@@ -1,0 +1,112 @@
+---
+title: "Server Configuration Reference"
+---
+
+Look up every configuration key available to tune the self-hosted Svix server for your environment.
+
+## Configuration file location and format
+
+The Svix server reads its configuration from a TOML file. The repository ships a `config.default.toml` that lists every available key with its default value. Copy that file, rename it (for example, `config.toml`), and pass it to the server at startup.
+
+The server also accepts configuration through environment variables. Every key in the TOML file maps to an environment variable using the pattern described in the [Environment variable overrides](#environment-variable-overrides) section below.
+
+## Database settings
+
+The Svix server requires PostgreSQL. Set the connection string in your configuration file (needs confirmation):
+
+```toml
+db_dsn = "postgresql://user:password@localhost/svix"
+```
+
+The server runs database migrations automatically on startup, or you can run them manually with the `migrate` CLI command.
+
+## Queue backend settings
+
+The server supports multiple queue backends for dispatching webhook delivery tasks. You select the backend with the `queue_type` key. Supported values include `redis`, `rabbitmq`, and `memory` (in-process, suitable for development only).
+
+```toml
+# Options: redis, rabbitmq, memory
+queue_type = "redis"
+
+# Required when queue_type = "redis"
+redis_dsn = "redis://localhost:6379"
+
+# Required when queue_type = "rabbitmq"
+rabbitmq_dsn = "amqp://guest:guest@localhost/%2f"
+```
+
+Use `memory` only for local testing. It does not persist tasks across restarts.
+
+## Cache backend settings
+
+The cache layer stores short-lived data such as idempotency keys. You select the backend with the `cache_type` key. Supported values are `redis`, `memory`, and `none`.
+
+```toml
+# Options: redis, memory, none
+cache_type = "redis"
+
+# Required when cache_type = "redis" (can share the same Redis instance as the queue)
+redis_dsn = "redis://localhost:6379"
+```
+
+Setting `cache_type = "none"` disables caching entirely, which means idempotency enforcement is also disabled.
+
+## JWT settings and supported algorithms
+
+All API calls require a JWT passed as `Authorization: Bearer <token>`. The server validates JWTs using the secret or key material you configure.
+
+```toml
+jwt_secret = "your-secret-here"
+```
+
+The default signing algorithm is HS256. The server also supports HS384, HS512, RS256, RS384, RS512, and EdDSA.
+
+Generate a token with the CLI:
+
+```sh
+svix-server jwt generate
+```
+
+Generate an asymmetric key pair with:
+
+```sh
+svix-server asymmetric-key generate
+```
+
+The `DefaultSignatureType` configuration controls which algorithm is used when signing webhook payloads delivered to endpoints.
+
+## Retry and timeout settings
+
+The server retries failed webhook deliveries automatically. You can tune the behavior with the following keys (needs confirmation for exact key names; consult your `config.default.toml`):
+
+- **`worker_timeout`** — maximum time in seconds the server waits for a response from an endpoint before marking the attempt as failed.
+- **`retry_schedule`** — list of delays (in seconds) between successive retry attempts. The number of entries determines the maximum number of retries.
+
+Endpoint-level throttling is also available. You set `throttle_rate` on an individual endpoint to cap the maximum messages per second delivered to that URL.
+
+The server shuts down gracefully on SIGTERM or Ctrl+C, allowing in-flight deliveries to complete.
+
+## Operational webhook settings
+
+Operational webhooks let you subscribe to platform-level events such as delivery failures. You configure the endpoint that receives these events in the server configuration (needs confirmation):
+
+```toml
+# URL that receives operational webhook events
+operational_webhook_address = "https://your-ops-endpoint.example.com/svix-ops"
+```
+
+You can also set a signing secret for operational webhook payloads so your receiver can verify them.
+
+## Environment variable overrides
+
+Every TOML configuration key can be overridden with an environment variable. Prefix the uppercased key name with `SVIX_`. For example (needs confirmation):
+
+| TOML key | Environment variable |
+|---|---|
+| `db_dsn` | `SVIX_DB_DSN` |
+| `jwt_secret` | `SVIX_JWT_SECRET` |
+| `redis_dsn` | `SVIX_REDIS_DSN` |
+| `queue_type` | `SVIX_QUEUE_TYPE` |
+| `cache_type` | `SVIX_CACHE_TYPE` |
+
+Environment variables take precedence over values in the configuration file, making them convenient for secrets in containerized deployments.

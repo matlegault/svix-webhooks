@@ -1,0 +1,65 @@
+---
+title: "CLI Overview"
+---
+
+The Svix CLI lets you manage webhook resources, forward webhooks to your local machine, and run guided setup flows directly from your terminal.
+
+## Installation
+
+Install the Svix CLI from the releases page or your package manager (needs confirmation). The CLI is part of the `svix-webhooks` repository and is written in Rust.
+
+## Authentication and login
+
+Run `svix login` to authenticate. The CLI stores your credentials in the configuration file at `~/.config/svix/config.toml`. All API calls require a JWT passed as `Authorization: Bearer <token>`. You can generate a token with `svix-server jwt generate` on a self-hosted instance.
+
+## Configuration file (~/.config/svix/config.toml)
+
+The CLI stores its configuration in TOML format at `~/.config/svix/config.toml`. After running `svix login`, your API key and server URL are written there automatically. You can edit this file directly to point the CLI at a self-hosted server or switch between environments.
+
+## Environment variable overrides (SVIX_*)
+
+You can override any configuration value by setting an environment variable with the `SVIX_` prefix. This is useful in CI pipelines or when you need to switch credentials without editing the config file.
+
+## Top-level command groups
+
+The CLI exposes the following top-level commands.
+
+| Command | What it does |
+|---|---|
+| `svix application` | Create, list, update, and delete applications (one per customer). |
+| `svix authentication` | Manage authentication tokens and dashboard access. |
+| `svix autoconfig-subscription` | Manage AutoConfig subscriptions for simplified endpoint registration. |
+| `svix completion` | Generate shell completion scripts. |
+| `svix connector` | Manage connectors. |
+| `svix destination` | Manage message destinations. |
+| `svix endpoint` | Create, list, update, and delete endpoints; rotate secrets; replay messages. |
+| `svix environment` | Manage environments. |
+| `svix event-type` | Create and manage event type schemas. |
+| `svix health` | Check the health of the Svix server. |
+| `svix ingest` | Manage ingest sources and endpoints. |
+| `svix integration` | Manage integrations. |
+| `svix listen` | Forward webhooks from relay.svix.com to a local URL for development. |
+| `svix login` | Authenticate the CLI and save credentials. |
+| `svix message` | Send and list messages. |
+| `svix message-attempt` | List and inspect delivery attempts, filter by status or event type. |
+| `svix open` | Open the Svix dashboard in your browser. |
+| `svix operational-webhook` | Manage operational webhook subscriptions for platform events. |
+| `svix seed` | Seed your environment with sample data. |
+| `svix signature` | Sign and verify webhook payloads. |
+| `svix streaming` | Manage streaming streams, sinks, and event types. |
+| `svix wizard` | Run a guided setup flow. |
+
+The `endpoint` command supports subcommands such as `list`, `create`, `get`, `update`, `delete`, `rotate-secret`, `replay-missing`, `bulk-replay`, `recover`, `send-example`, and `get-stats`. Options like `--limit`, `--iterator`, `--since`, and `--until` are available where relevant.
+
+The `message-attempt` command lets you filter attempts by status (`Success (0)`, `Pending (1)`, `Failed (2)`, `Sending (3)`, `Canceled (4)`), HTTP status code class, channel, tag, event type, and date range.
+
+## Shell completion
+
+Run `svix completion` to generate a completion script for your shell.
+
+```bash
+# Example: generate completions for bash
+svix completion bash
+```
+
+Load the output into your shell profile to get tab completion for all commands and flags. (needs confirmation)

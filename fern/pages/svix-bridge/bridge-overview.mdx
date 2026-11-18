@@ -1,0 +1,49 @@
+---
+title: "Bridge Overview"
+---
+
+Svix Bridge connects message queues and webhook sources to Svix without requiring you to write custom glue code.
+
+## What is Svix Bridge?
+
+Svix Bridge is a message routing and transformation service. It reads messages from a source, optionally transforms them with JavaScript, and forwards them to a destination — either the Svix API or an outbound webhook. `bridge/svix-bridge/src/webhook_receiver/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+Each integration is identified by an `IntegrationId`, which maps to a configured verifier and output. When Bridge starts, it builds an internal route table from your configuration and begins consuming messages. `bridge/svix-bridge/src/webhook_receiver/types.rs`@`124218287bb291261bc7227b1e218be45d59dd9c`
+
+## Supported sources: Kafka, RabbitMQ, Redis, SQS, GCP Pub/Sub
+
+Bridge can consume messages from the following queue backends. Each source has its own set of configuration keys (needs confirmation):
+
+- **Kafka** — configure with `kafka_bootstrap_brokers`, `kafka_group_id`, `kafka_topic`, `kafka_auto_offset_reset`, `kafka_security_protocol`, and `kafka_sasl_mechanism`. The `kafka_transformation_input` key controls whether the raw payload or a full envelope is passed to the transformation. `bridge/svix-bridge-plugin-kafka/src/config.rs`@`124218287bb291261bc7227b1e218be45d59dd9c`
+- **RabbitMQ** — configure with `uri` and `queue_name`. `bridge/svix-bridge-plugin-queue/src/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+- **Redis** — configure with `dsn` and `queue_key`. Note: Redis only supports JSON-formatted transformations; string-format transformations are not supported for this backend. `bridge/svix-bridge-plugin-queue/src/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+- **SQS** — configure with `queue_dsn`. `bridge/svix-bridge-plugin-queue/src/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+- **GCP Pub/Sub** — configure with `subscription_id` and `topic`. `bridge/svix-bridge-plugin-queue/src/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+Bridge also exposes an HTTP endpoint at `POST /webhook/{integration_id}` so that inbound webhooks can act as a source. Incoming requests are verified before being forwarded. `bridge/svix-bridge/src/webhook_receiver/types.rs`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+## Supported destinations: Svix API, webhooks
+
+Once a message is received and optionally transformed, Bridge forwards it to a destination. Supported destinations include the Svix API (to create messages) and outbound webhooks. Kafka can also act as an output destination, configured with `kafka_bootstrap_brokers`, `kafka_topic`, and `kafka_security_protocol`. `bridge/svix-bridge-plugin-kafka/src/config.rs`@`124218287bb291261bc7227b1e218be45d59dd9c`
+
+## Transformation pipeline
+
+You can attach a JavaScript transformation to any integration using the `transformation` configuration key. The transformation receives the incoming message payload and returns a modified object that Bridge uses when calling the destination. `bridge/svix-bridge-plugin-queue/src/lib.rs`@`124218287bb291261bc7227b1e218be45d59dd9c`
+
+For Kafka sources, `kafka_transformation_input` controls what the script receives: `payload` (the raw message body, the default) or `envelope` (the full message envelope including metadata). `bridge/svix-bridge-plugin-kafka/src/config.rs`@`124218287bb291261bc7227b1e218be45d59dd9c`
+
+String-format transformations work with Kafka, RabbitMQ, SQS, and GCP Pub/Sub. Redis sources only support JSON-format transformations. `bridge/svix-bridge-plugin-queue/src/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+## JavaScript engines: Deno and QuickJS
+
+Bridge supports two JavaScript execution engines: **Deno** and **QuickJS**. You select the engine with the `js_engine` configuration key, which accepts `deno`, `quickjs`, or `both`. When set to `both`, the two engines run in parallel, which is useful for validating that your transformation produces consistent results across engines. `bridge/svix-bridge/src/webhook_receiver/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+## OpenTelemetry tracing and metrics
+
+Bridge has optional support for OpenTelemetry tracing and metrics. The consumer loop instruments each receive and process operation with span attributes including `messaging.system`, `messaging.operation`, `messaging.source`, and the plugin name and version. `bridge/svix-bridge-plugin-queue/src/lib.rs`@`124218287bb291261bc7227b1e218be45d59dd9c`
+
+OpenTelemetry integration is optional and does not need to be configured for Bridge to operate. `bridge/svix-bridge/src/webhook_receiver/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)
+
+## Health endpoint
+
+Bridge exposes a `GET /health` endpoint you can use to check whether the service is running. This is useful for liveness probes in containerized deployments. `bridge/svix-bridge/src/webhook_receiver/`@`124218287bb291261bc7227b1e218be45d59dd9c` (needs confirmation)

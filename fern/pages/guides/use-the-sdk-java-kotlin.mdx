@@ -1,0 +1,219 @@
+---
+title: "Using the Java & Kotlin SDKs"
+---
+
+This guide shows you how to add the Java or Kotlin SDK to a JVM project, send webhooks, verify signatures, and work with AutoConfig flows.
+
+## Adding the dependency (Maven / Gradle)
+
+Add the Svix SDK to your project using your build tool. The Java and Kotlin SDKs are separate artifacts.
+
+**Maven (Java)**
+
+```xml
+<dependency>
+  <groupId>com.svix</groupId>
+  <artifactId>svix</artifactId>
+  <version><!-- check Maven Central for the latest version --></version>
+</dependency>
+```
+
+**Gradle (Kotlin)**
+
+```kotlin
+implementation("com.svix.kotlin:svix-kotlin:<!-- check Maven Central for the latest version -->")
+```
+
+The Java SDK lives under the `com.svix` package. The Kotlin SDK lives under `com.svix.kotlin`.
+
+## Initialising SvixOptions and Svix client
+
+Create a `Svix` client by passing your API token. All API calls require a JWT passed as `Authorization: Bearer <token>`.
+
+**Java**
+
+```java
+import com.svix.Svix;
+import com.svix.SvixOptions;
+
+Svix svix = new Svix("YOUR_API_KEY");
+```
+
+**Kotlin**
+
+```kotlin
+import com.svix.kotlin.Svix
+
+val svix = Svix("YOUR_API_KEY")
+```
+
+You can pass a `SvixOptions` object to customise the server URL or other client settings.
+
+## Managing applications and endpoints
+
+In Svix, each of your customers maps to an **application**. Endpoints are the destination URLs attached to an application. (needs confirmation)
+
+**Java — create an application and endpoint**
+
+```java
+import com.svix.models.ApplicationIn;
+import com.svix.models.ApplicationOut;
+import com.svix.models.EndpointIn;
+import com.svix.models.EndpointOut;
+
+ApplicationOut app = svix.getApplication().create(
+    new ApplicationIn().name("My Customer App")
+);
+
+EndpointOut endpoint = svix.getEndpoint().create(
+    app.getId(),
+    new EndpointIn().url("https://example.com/webhook")
+);
+```
+
+**Kotlin — create an application and endpoint**
+
+```kotlin
+import com.svix.kotlin.models.ApplicationIn
+import com.svix.kotlin.models.EndpointIn
+
+val app = svix.application.create(ApplicationIn(name = "My Customer App"))
+
+val endpoint = svix.endpoint.create(
+    app.id,
+    EndpointIn(url = "https://example.com/webhook")
+)
+```
+
+You can also list, get, update, upsert, and delete endpoints. The `Endpoint` class exposes `list`, `get`, `create`, `upsert`, and `delete` methods.
+
+When creating an endpoint, leaving `secret` as `null` causes the server to generate one automatically, which is the recommended approach.
+
+## Sending messages
+
+A **message** is the webhook payload dispatched to all of an application's endpoints. (needs confirmation)
+
+**Java**
+
+```java
+import com.svix.models.MessageIn;
+import com.svix.models.MessageOut;
+
+MessageOut msg = svix.getMessage().create(
+    app.getId(),
+    new MessageIn()
+        .eventType("invoice.paid")
+        .payload("{\"invoiceId\": \"inv_123\", \"amount\": 4200}")
+);
+```
+
+**Kotlin**
+
+```kotlin
+import com.svix.kotlin.models.MessageIn
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+
+val msg = svix.message.create(
+    app.id,
+    MessageIn(
+        eventType = "invoice.paid",
+        payload = JsonObject(mapOf("invoiceId" to JsonPrimitive("inv_123")))
+    )
+)
+```
+
+The `eventId` field is an optional custom unique ID. If a message with the same `eventId` already exists for the application, the server returns a 409 conflict.
+
+You can supply an idempotency key via `MessageCreateOptions` to safely retry the create call.
+
+Message payloads default to excluded (`withContent=false`) in v2+ of the SDKs. Pass `withContent=true` in `MessageListOptions` or `MessageGetOptions` when you need the payload returned.
+
+## Webhook verification (Java 8 and Java 11+)
+
+Use the `Webhook` class to verify that an incoming webhook was sent by Svix. Verification uses HMAC-SHA256 and enforces a 5-minute timestamp tolerance.
+
+The SDK ships two variants of the Java `Webhook` class: one for Java 8 and one for Java 11+. The Java 11 variant adds an overload that accepts `java.net.http.HttpHeaders` directly.
+
+**Java 8 — verify with a map of headers**
+
+```java
+import com.svix.Webhook;
+
+Webhook wh = new Webhook("whsec_YOUR_ENDPOINT_SECRET");
+wh.verify(payloadString, headersMap); // headersMap is Map<String, List<String>>
+```
+
+**Java 11+ — verify with HttpHeaders**
+
+```java
+import com.svix.Webhook;
+import java.net.http.HttpHeaders;
+
+Webhook wh = new Webhook("whsec_YOUR_ENDPOINT_SECRET");
+wh.verify(payloadString, httpHeaders); // java.net.http.HttpHeaders
+```
+
+
+
+**Kotlin — verify with HttpHeaders**
+
+```kotlin
+import com.svix.kotlin.Webhook
+
+val wh = Webhook("whsec_YOUR_ENDPOINT_SECRET")
+wh.verify(payloadString, httpHeaders)
+```
+
+
+
+The verifier checks the `svix-id`, `svix-signature`, and `svix-timestamp` headers. If those are absent it falls back to the unbranded `webhook-id`, `webhook-signature`, and `webhook-timestamp` headers.
+
+Secrets prefixed with `whsec_` are automatically decoded from Base64.
+
+## AutoConfig token flows
+
+AutoConfig lets your customers register their own endpoints using a short-lived token instead of going through the full API. The SDK exposes `AutoConfig` (for the sender side) and `AutoConfigConsumer` (for the receiver side).
+
+Both v1 tokens (prefixed `auto_v1_`) and v2 tokens (prefixed `auto_v2_`) are supported.
+
+**Java — generate an AutoConfig token**
+
+```java
+// svix.getAutoConfig() returns the AutoConfig API object
+// Use it to create a token scoped to a specific application
+```
+
+**Kotlin — consume an AutoConfig token**
+
+```kotlin
+// svix.autoConfigConsumer provides methods to register
+// an endpoint or sink using the token your customer received
+```
+
+Refer to the `AutoConfig` and `AutoConfigConsumer` classes in the SDK for the full method signatures.
+
+## Background tasks and statistics
+
+The SDK exposes `BackgroundTask` and `Statistics` API objects for operational visibility. (needs confirmation)
+
+**Java**
+
+```java
+// Retrieve a background task by ID
+svix.getBackgroundTask().get(taskId);
+
+// Get endpoint attempt statistics
+svix.getEndpoint().getStats(appId, endpointId);
+```
+
+**Kotlin**
+
+```kotlin
+svix.backgroundTask.get(taskId)
+svix.endpoint.getStats(appId, endpointId)
+```
+
+
+
+The `Message` class also exposes a `poller` property (`MessagePoller`) for polling messages from an application.

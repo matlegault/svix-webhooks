@@ -1,0 +1,76 @@
+---
+title: "Message Transformations"
+---
+
+Transformations let you reshape queue messages with JavaScript before Svix Bridge forwards them to Svix.
+
+## What is a transformation?
+
+When a message arrives from a queue (Kafka, RabbitMQ, SQS, GCP Pub/Sub, or Redis), Bridge can run a JavaScript function on the raw payload before it creates a Svix message. You attach a transformation to a sender or receiver by setting the `transformation` key in your Bridge configuration.
+
+This is useful when the queue message format does not match what your Svix endpoint expects, or when you need to extract fields such as the application ID or event type from the payload itself. (needs confirmation)
+
+## Transformation function signature
+
+Your transformation must be a JavaScript function that accepts a single input object and returns an object. Bridge passes the message payload to the function and expects a structured object back.
+
+```js
+function handler(input) {
+  return {
+    appId: input.payload.tenantId,
+    message: {
+      eventType: input.payload.eventType,
+      payload: input.payload.data,
+    },
+  };
+}
+```
+
+## Input and output shapes
+
+The input object Bridge passes to your function depends on the queue backend and the `kafka_transformation_input` setting (for Kafka). The two options are `payload` (the default, passes only the message body) and `envelope` (passes the full message envelope including metadata).
+
+The function must return a `JsObject`. If the function returns an unexpected value, Bridge treats the transformation as failed and nacks the delivery.
+
+The returned object is used to construct a `CreateMessageRequest` sent to Svix.
+
+## String vs. JSON format (Redis limitation)
+
+Bridge supports two transformation input formats: `string` and `json`. Most queue backends support both. **Redis only supports JSON-formatted transformations** — string format is not available for Redis sources.
+
+When using JSON format, Bridge parses the raw message as a JSON value before passing it to your function. When using string format, the raw message bytes are passed as a string. If you are consuming from Redis, make sure your messages are valid JSON and your transformation expects a parsed object as input.
+
+## Choosing a JS engine (Deno vs. QuickJS)
+
+Bridge ships with two JavaScript execution engines. You select one with the `js_engine` configuration key (needs confirmation):
+
+- `deno` — uses the Deno runtime. (needs confirmation)
+- `quickjs` — uses the QuickJS engine. (needs confirmation)
+- `both` — runs both engines in parallel (see the next section). (needs confirmation)
+
+
+
+The active engine is reported by the `GET /health` endpoint in the `js_backend` field of the response.
+
+```yaml
+# Example Bridge config snippet
+js_engine: deno
+```
+
+## Running both engines for validation
+
+Setting `js_engine: both` runs your transformation through Deno and QuickJS simultaneously. This is useful when you are migrating between engines or want to verify that your script produces identical output on both.
+
+```yaml
+js_engine: both
+```
+
+Use `both` during development or testing, then switch to a single engine in production once you have confirmed consistent behavior. (needs confirmation)
+
+## Debugging transformations
+
+The `GET /health` endpoint returns the currently active JS engine in the `js_backend` field, which helps you confirm which engine is running.
+
+If a transformation fails — for example, because the function returns an unexpected value or throws an error — Bridge nacks the delivery so the message is not lost. Check your Bridge logs for transformation error messages; the consumer loop logs the system name and source queue on each receive cycle to help you trace which integration is affected.
+
+For Kafka sources, you can enable verbose rdkafka logging by setting `kafka_debug_contexts` in your input config, which can help surface connectivity or offset issues that prevent messages from reaching your transformation at all.

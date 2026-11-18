@@ -1,0 +1,213 @@
+---
+title: "Quickstart"
+---
+
+Send your first webhook message end-to-end in under five minutes using the Svix API or an SDK.
+
+## Prerequisites
+
+You need a Svix API token to authenticate every request. All API calls require a JWT passed as `Authorization: Bearer <token>`.
+
+If you are using the self-hosted server, generate a token with `svix-server jwt generate` or through the dashboard. If you are using Svix Cloud, retrieve your token from the dashboard.
+
+## Install an SDK or get your API token
+
+Svix provides official SDKs for nine languages. Install the one that matches your stack:
+
+<CodeBlocks>
+```bash Python
+pip install svix
+```
+
+```bash TypeScript / JavaScript
+npm install svix
+```
+
+```bash Go
+go get github.com/svix/svix-webhooks/v2
+```
+
+```bash PHP
+composer require svix/svix
+```
+</CodeBlocks>
+
+The Go module path is `github.com/svix/svix-webhooks/v2` and requires Go 1.21 or later.
+
+The PHP package requires PHP 8.1 or later and `guzzlehttp/guzzle` 7.x or 8.x.
+
+If you prefer to call the REST API directly, set your token in an environment variable (needs confirmation):
+
+```bash
+export SVIX_AUTH_TOKEN="YOUR_API_KEY"
+```
+
+## Create an application
+
+An application represents one of your customers. Create one before you can send any webhooks. (needs confirmation)
+
+<CodeBlocks>
+```python Python
+from svix import Svix, ApplicationIn
+
+svix = Svix("YOUR_API_KEY")
+app = svix.application.create(ApplicationIn(name="My First App"))
+print(app.id)
+```
+
+```typescript TypeScript
+import { Svix, ApplicationIn } from "svix";
+
+const svix = new Svix("YOUR_API_KEY");
+const app = await svix.application.create({ name: "My First App" });
+console.log(app.id);
+```
+
+```go Go
+import svix "github.com/svix/svix-webhooks/v2/go"
+
+client := svix.New("YOUR_API_KEY", nil)
+app, err := client.Application.Create(ctx, &svix.ApplicationIn{
+    Name: "My First App",
+})
+fmt.Println(app.Id)
+```
+
+```bash cURL
+curl -X POST https://api.svix.com/api/v1/app/ \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My First App"}'
+```
+</CodeBlocks>
+
+Save the returned `id` — you will use it as `app_id` in the next steps.
+
+## Register an endpoint
+
+An endpoint is the destination URL that will receive your webhooks. Register one on the application you just created. (needs confirmation)
+
+<CodeBlocks>
+```python Python
+from svix import EndpointIn
+
+endpoint = svix.endpoint.create(
+    app.id,
+    EndpointIn(url="https://example.com/webhook")
+)
+print(endpoint.id)
+```
+
+```typescript TypeScript
+const endpoint = await svix.endpoint.create(app.id, {
+  url: "https://example.com/webhook",
+});
+console.log(endpoint.id);
+```
+
+```go Go
+endpoint, err := client.Endpoint.Create(ctx, app.Id, &svix.EndpointIn{
+    Url: "https://example.com/webhook",
+})
+fmt.Println(endpoint.Id)
+```
+
+```bash cURL
+curl -X POST https://api.svix.com/api/v1/app/{app_id}/endpoint/ \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com/webhook"}'
+```
+</CodeBlocks>
+
+When `secret` is omitted, Svix generates one automatically.
+
+## Send a message
+
+A message is the webhook payload you want to deliver. Pass the application ID, an event type, and a JSON payload. (needs confirmation)
+
+<CodeBlocks>
+```python Python
+from svix import MessageIn
+
+message = svix.message.create(
+    app.id,
+    MessageIn(
+        event_type="invoice.paid",
+        payload={"invoice_id": "inv_123", "amount": 4200}
+    )
+)
+print(message.id)
+```
+
+```typescript TypeScript
+const message = await svix.message.create(app.id, {
+  eventType: "invoice.paid",
+  payload: { invoiceId: "inv_123", amount: 4200 },
+});
+console.log(message.id);
+```
+
+```go Go
+payload := map[string]interface{}{
+    "invoiceId": "inv_123",
+    "amount":    4200,
+}
+message, err := client.Message.Create(ctx, app.Id, &svix.MessageIn{
+    EventType: "invoice.paid",
+    Payload:   payload,
+})
+fmt.Println(message.Id)
+```
+
+```bash cURL
+curl -X POST https://api.svix.com/api/v1/app/{app_id}/msg/ \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"eventType": "invoice.paid", "payload": {"invoiceId": "inv_123", "amount": 4200}}'
+```
+</CodeBlocks>
+
+Svix immediately attempts delivery to every endpoint registered on the application and retries automatically on failure.
+
+## Inspect the delivery attempt
+
+After sending a message, you can check whether it was delivered successfully by listing message attempts. (needs confirmation)
+
+<CodeBlocks>
+```python Python
+attempts = svix.message_attempt.list_by_msg(app.id, message.id)
+for attempt in attempts.data:
+    print(attempt.id, attempt.response_status_code)
+```
+
+```typescript TypeScript
+const attempts = await svix.messageAttempt.listByMsg(app.id, message.id);
+for (const attempt of attempts.data) {
+  console.log(attempt.id, attempt.responseStatusCode);
+}
+```
+
+```go Go
+attempts, err := client.MessageAttempt.ListByMsg(ctx, app.Id, message.Id, nil)
+for _, attempt := range attempts.Data {
+    fmt.Println(attempt.Id, attempt.ResponseStatusCode)
+}
+```
+
+```bash cURL
+curl https://api.svix.com/api/v1/app/{app_id}/attempt/msg/{msg_id}/ \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeBlocks>
+
+Each attempt record shows the HTTP status code returned by your endpoint and whether delivery succeeded.
+
+## Next steps
+
+You have sent your first webhook. From here you can:
+
+- Verify incoming webhook signatures using the `Webhook` class available in every SDK.
+- Explore event types to filter which events each endpoint receives.
+- Use AutoConfig tokens to let your customers register their own endpoints without exposing your API token.
+- Browse the full API reference at `https://api.svix.com` and general documentation at `https://docs.svix.com`.

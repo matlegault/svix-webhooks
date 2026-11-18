@@ -1,0 +1,170 @@
+---
+title: "Handling Errors & Rate Limits"
+---
+
+This guide explains how to identify API errors, read error responses, and retry requests safely using idempotency keys.
+
+## HTTP error codes returned by the API
+
+The Svix API uses standard HTTP status codes to signal the outcome of every request. The codes you will encounter most often are (needs confirmation):
+
+- `400` Bad Request: the request body or parameters are malformed.
+- `401` Unauthorized: no token was supplied or the token is invalid.
+- `403` Forbidden: the token is valid but does not have permission for the requested resource.
+- `404` Not Found: the application, endpoint, or other resource does not exist.
+- `409` Conflict: a resource with the same identifier already exists.
+- `422` Unprocessable Entity: the request was well-formed but failed validation.
+- `429` Too Many Requests: you have exceeded the rate limit.
+- `5xx` Server Error: something went wrong on the Svix side; safe to retry.
+
+## Error response body structure
+
+When the API returns an error, the response body is a JSON object. The Python SDK models this as `HttpError`, and validation failures produce an `HTTPValidationError`.
+
+A typical error body looks like this:
+
+```json
+{
+  "code": "not_found",
+  "detail": "Application not found."
+}
+```
+
+Validation errors (422) include an additional `detail` array that lists each field that failed.
+
+## Validation errors (422)
+
+A `422` response means the server understood your request but one or more fields did not pass validation. The Python SDK exposes this as `HTTPValidationError`.
+
+The `detail` array in the response body tells you exactly which fields failed and why. Check each item for the field path and the error message, fix the offending fields, and resubmit.
+
+## Authentication errors (401/403)
+
+All API calls require a JWT passed as `Authorization: Bearer <token>`. A `401` means the token is missing or cannot be verified. A `403` means the token is valid but lacks permission for the resource you requested.
+
+If you receive a `401`, check that:
+
+- You are including the `Authorization: Bearer <token>` header on every request.
+- The token has not expired or been revoked.
+
+If you receive a `403`, verify that the token you are using has the correct scope for the operation.
+
+## Rate limiting (429)
+
+When you exceed the rate limit, the API returns `429 Too Many Requests`. Back off before retrying. The Ruby HTTP client includes automatic retries with exponential backoff for network errors.
+
+The JavaScript SDK also includes built-in retry logic with a configurable retry schedule.
+
+When you implement your own retry loop, use exponential backoff and add jitter to avoid thundering-herd problems. Always include an idempotency key (see below) so that retried requests do not create duplicate resources. (needs confirmation)
+
+## SDK exception types per language
+
+Each SDK wraps API errors in a language-native exception type. Use these to catch and inspect errors in your code. (needs confirmation)
+
+- **Python**: `HttpError` for general API errors, `HTTPValidationError` for 422 responses.
+- **TypeScript/JavaScript**: `ApiException`.
+- **Java**: `com.svix.exceptions.ApiException`, thrown alongside `IOException` on network failures.
+- **Ruby**: `Svix::ApiError`.
+- **PHP**: `Svix\Exception\ApiException`.
+
+Here is how you catch an API error in each language (needs confirmation):
+
+**Python**
+```python
+from svix.api.errors import HttpError, HTTPValidationError
+
+try:
+    app = svix.application.create(ApplicationIn(name="my-app"))
+except HTTPValidationError as e:
+    print("Validation failed:", e)
+except HttpError as e:
+    print("API error:", e)
+```
+
+**TypeScript**
+```typescript
+import { ApiException } from "svix";
+
+try {
+  const app = await svix.application.create({ name: "my-app" });
+} catch (e) {
+  if (e instanceof ApiException) {
+    console.error("API error", e.statusCode, e.body);
+  }
+}
+```
+
+**Java**
+```java
+import com.svix.exceptions.ApiException;
+
+try {
+    ApplicationOut app = svix.getApplication().create(applicationIn);
+} catch (ApiException e) {
+    System.err.println("API error: " + e.getMessage());
+} catch (IOException e) {
+    System.err.println("Network error: " + e.getMessage());
+}
+```
+
+**Ruby**
+```ruby
+begin
+  app = svix.application.create(Svix::ApplicationIn.new({ name: "my-app" }))
+rescue Svix::ApiError => e
+  puts "API error: #{e.message}"
+end
+```
+
+**PHP**
+```php
+use Svix\Exception\ApiException;
+
+try {
+    $app = $svix->application->create(new ApplicationIn(name: "my-app"));
+} catch (ApiException $e) {
+    echo "API error: " . $e->getMessage();
+}
+```
+
+## Idempotency keys for safe retries
+
+Several mutating operations accept an `idempotency-key` header. When you supply the same key on a retry, the server returns the original response instead of creating a duplicate resource.
+
+Operations that support idempotency keys include endpoint creation, secret rotation, replay, bulk replay, and recover.
+
+Pass the key through the options object in each SDK (needs confirmation):
+
+**TypeScript**
+```typescript
+await svix.endpoint.create(
+  appId,
+  { url: "https://example.com/webhook" },
+  { idempotencyKey: "unique-request-id-123" }
+);
+```
+
+
+**Java**
+```java
+EndpointCreateOptions options = new EndpointCreateOptions();
+options.idempotencyKey = "unique-request-id-123";
+svix.getEndpoint().create(appId, endpointIn, options);
+```
+
+
+**Ruby**
+```ruby
+svix.endpoint.create(app_id, endpoint_in, { "idempotency-key" => "unique-request-id-123" })
+```
+
+
+**PHP**
+```php
+$options = new EndpointCreateOptions();
+$options->idempotencyKey = "unique-request-id-123";
+$svix->endpoint->create($appId, $endpointIn, $options);
+```
+
+
+Use a stable, unique value per logical request, such as a UUID you generate before the first attempt and reuse on every retry of that same operation. (needs confirmation)

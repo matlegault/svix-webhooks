@@ -1,0 +1,146 @@
+---
+title: "Using the Go SDK"
+---
+
+This guide covers installing the Svix Go SDK, configuring the client, managing webhook resources, verifying signatures, and polling messages.
+
+## Installation
+
+The SDK requires Go 1.16 or later.
+
+Add the module to your project:
+
+```sh
+go get github.com/svix/svix-webhooks/v2/go
+```
+
+The package is published at `github.com/svix/svix-webhooks/v2/go` and tracked on pkg.go.dev.
+
+## Initialising with New(token, options)
+
+Create a client by calling `New` with your API token:
+
+```go
+import svix "github.com/svix/svix-webhooks/v2/go"
+
+client := svix.New("YOUR_API_KEY", nil)
+```
+
+Pass a `*svix.SvixOptions` struct as the second argument to override defaults such as the server URL. Pass `nil` to accept the defaults.
+
+## Regional endpoint selection
+
+The SDK selects the correct regional base URL from the suffix of your token. The supported suffixes and their regions are `us`, `eu`, `in`, `ca`, and `au`.
+
+If you are self-hosting, override the server URL through `SvixOptions`:
+
+```go
+opts := &svix.SvixOptions{
+    ServerUrl: "https://your-svix-instance.example.com",
+}
+client := svix.New("YOUR_API_KEY", opts)
+```
+
+## Applications, endpoints, and messages
+
+The `Svix` client exposes typed sub-clients for each resource. The main ones you will use are `Application`, `Endpoint`, and `Message`.
+
+**Create an application** (one per customer):
+
+```go
+app, err := client.Application.Create(ctx, svix.ApplicationIn{
+    Name: "my-customer",
+}, nil)
+```
+
+**Add an endpoint** to an application:
+
+```go
+ep, err := client.Endpoint.Create(ctx, app.Id, svix.EndpointIn{
+    Url: "https://example.com/webhook",
+}, nil)
+```
+
+`EndpointCreateOptions` accepts an `IdempotencyKey` field to make the call idempotent.
+
+**Send a message**:
+
+```go
+msg, err := client.Message.Create(ctx, app.Id, svix.MessageIn{
+    EventType: "invoice.paid",
+    Payload:   map[string]interface{}{"invoiceId": "inv_123"},
+}, nil)
+```
+
+You can list endpoints with `EndpointListOptions`, which accepts `Limit`, `Iterator`, and `Order` fields.
+
+## Webhook verification with NewWebhook
+
+When your server receives a webhook, verify the signature before processing the payload (needs confirmation):
+
+```go
+import svix "github.com/svix/svix-webhooks/v2/go"
+
+wh, err := svix.NewWebhook("whsec_YOUR_SIGNING_SECRET")
+if err != nil {
+    // handle error
+}
+
+err = wh.Verify(payload, r.Header)
+if err != nil {
+    // signature invalid
+}
+```
+
+`NewWebhook` accepts the endpoint signing secret. `Verify` takes the raw request body as `[]byte` and the request headers. The SDK accepts both `svix-*` and `webhook-*` header formats for backwards compatibility.
+
+## Message polling with MessagePoller
+
+`MessagePoller` lets you pull messages from Svix rather than receive them over HTTP. Obtain a poller from the client and call `Receive` with a consumer ID (needs confirmation):
+
+```go
+poller := client.MessagePoller()
+
+msgs, err := poller.Receive(ctx, "consumer-1", nil)
+```
+
+After processing, commit the offset so the server knows which messages have been handled (needs confirmation):
+
+```go
+err = poller.Commit(ctx, "consumer-1", offset, nil)
+```
+
+
+
+## AutoConfig and AutoConfigConsumer
+
+AutoConfig tokens simplify endpoint registration for your customers. Use `NewAutoConfig` on the sender side and `NewAutoConfigConsumer` on the receiver side. (needs confirmation)
+
+**Sender** - create an AutoConfig subscription:
+
+```go
+ac := svix.NewAutoConfig("YOUR_AUTOCONFIG_TOKEN", "https://consumer.example.com/svix")
+out, err := ac.Subscribe(ctx)
+```
+
+**Receiver** - accept an AutoConfig token and register a sink:
+
+```go
+acc := svix.NewAutoConfigConsumer("CONSUMER_TOKEN", sinkIn)
+```
+
+`AutoConfig` and `AutoConfigConsumer` are hand-written helpers, not generated code.
+
+## Error handling
+
+All SDK methods return a Go `error` as the second return value. Check it after every call (needs confirmation):
+
+```go
+app, err := client.Application.Create(ctx, svix.ApplicationIn{Name: "acme"}, nil)
+if err != nil {
+    // inspect or log err
+    return err
+}
+```
+
+API errors carry HTTP status information you can inspect by type-asserting the error to the SDK's error type.

@@ -1,0 +1,81 @@
+---
+title: "Operational Webhooks"
+---
+
+Operational webhooks let you subscribe to platform-level events so you can react when something important happens inside Svix itself, such as a delivery failure or an endpoint being disabled.
+
+## What are operational webhooks?
+
+When Svix processes your webhooks, it generates its own internal events: delivery failures, endpoint disablements, and similar platform activity. Operational webhooks let you receive those events at a URL you control, just like any other webhook. (needs confirmation)
+
+You register an endpoint that Svix will call whenever a matching platform event occurs. The payloads are signed and verifiable the same way as regular webhook messages.
+
+The Go SDK exposes this through the `OperationalWebhookEndpoint` type, and the Java SDK exposes it through the `OperationalWebhook` class.
+
+## Available event types
+
+Operational webhook event types cover platform-level activity. Based on the SDK surface, the following categories of events are available:
+
+- **Message delivery failures** - fired when Svix cannot deliver a message to an endpoint after retries. (needs confirmation)
+- **Endpoint disablement** - fired when Svix automatically disables an endpoint due to repeated failures. (needs confirmation)
+- **Background task completion** - fired when a background task (such as a bulk replay) finishes.
+
+The exact set of event type names is available in the Svix dashboard and API reference. (needs confirmation)
+
+## Registering an operational webhook endpoint
+
+You register an operational webhook endpoint using the `OperationalWebhookEndpoint` resource in the SDK. This is separate from the per-application `Endpoint` resource used for your customers' endpoints. (needs confirmation)
+
+Here is an example using the Go SDK:
+
+```go
+import svix "github.com/svix/svix-webhooks/v2/go"
+
+client := svix.New("YOUR_API_KEY", nil)
+
+// List existing operational webhook endpoints
+endpoints, err := client.OperationalWebhookEndpoint.List(ctx, nil)
+```
+
+
+
+In Java, the equivalent resource is accessed via `svix.getOperationalWebhook()`.
+
+When creating an endpoint, you provide a destination URL and optionally specify which event types you want to receive. If you omit the event type filter, the endpoint receives all operational events. (needs confirmation)
+
+## Verifying operational webhook payloads
+
+Operational webhook payloads are signed with HMAC-SHA256, the same mechanism used for regular Svix webhooks. You verify them using the `Webhook` helper available in every SDK.
+
+Here is an example using the Go SDK:
+
+```go
+import svix "github.com/svix/svix-webhooks/v2/go"
+
+wh, err := svix.NewWebhook("YOUR_ENDPOINT_SECRET")
+if err != nil {
+    // handle error
+}
+
+err = wh.Verify(payload, headers)
+if err != nil {
+    // signature invalid - reject the request
+}
+```
+
+
+
+The verifier accepts both `svix-*` and `webhook-*` header formats for backwards compatibility.
+
+You can find the signing secret for your operational webhook endpoint in the Svix dashboard or by calling the get-secret API operation on the `OperationalWebhookEndpoint` resource. (needs confirmation)
+
+## Use cases: alerting, monitoring, automation
+
+Operational webhooks are useful any time you need to react programmatically to platform events (needs confirmation):
+
+- **Alerting** - send a Slack or PagerDuty notification when an endpoint is automatically disabled so your team can investigate immediately.
+- **Monitoring** - track delivery failure rates by ingesting failure events into your observability stack.
+- **Automation** - trigger a workflow to re-enable an endpoint or notify the affected customer when Svix disables their endpoint after repeated failures.
+- **Audit logging** - record all platform-level events to a data store for compliance or debugging purposes.
+
+Because operational webhook payloads are signed, you can safely act on them in automated pipelines without additional authentication checks beyond signature verification. (needs confirmation)

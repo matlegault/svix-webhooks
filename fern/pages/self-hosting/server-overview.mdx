@@ -1,0 +1,60 @@
+---
+title: "Server Overview"
+---
+
+The Svix server is a self-hostable Rust application that handles webhook delivery, retries, signing, and endpoint management, backed by PostgreSQL and a choice of queue and cache backends.
+
+## Architecture overview
+
+The Svix server exposes a REST API under `/api/v1` for managing applications, endpoints, messages, and delivery attempts. The core modules are: `application`, `endpoint`, `message`, `attempt`, `event_type`, `auth`, `health`, and `admin`.
+
+All API calls require a JWT passed as `Authorization: Bearer <token>`. You can generate tokens with the `svix-server jwt generate` CLI command.
+
+The server supports multiple interchangeable backends for queuing and caching, so you can tune the deployment to your infrastructure without changing application code.
+
+## PostgreSQL database
+
+PostgreSQL is the primary data store for all persistent state: applications, endpoints, messages, message attempts, and event types. Before starting the server for the first time, run database migrations with the `migrate` CLI command.
+
+Additional CLI commands that operate on the database include:
+
+- `prune` — remove old message data.
+- `wipe` — remove all data for an organization.
+
+## Queue backends: Redis, RabbitMQ, in-memory
+
+The server uses a task queue to dispatch webhook delivery jobs to workers. Three backends are supported (needs confirmation):
+
+- **Redis** — recommended for production; durable and horizontally scalable.
+- **RabbitMQ** — an alternative durable queue backend.
+- **In-memory** — suitable for development and single-process deployments; messages are lost if the process restarts.
+
+The queue backend drives message retry logic. When a delivery attempt fails, the server re-enqueues the task according to configurable retry timeouts.
+
+## Cache backends: Redis, memory, none
+
+The server uses a cache layer to reduce database load for hot paths such as endpoint lookups. Three options are available (needs confirmation):
+
+- **Redis** — shared cache, suitable for multi-instance deployments.
+- **Memory** — process-local cache; each server instance maintains its own state.
+- **None** — disables caching entirely; every request hits the database.
+
+The `Cache` type is used directly in message handling code to support fast lookups during message creation and dispatch.
+
+## OpenTelemetry and observability
+
+The server exposes a health check endpoint at `GET /api/v1/health` that you can use with container orchestrators and load balancers. There is also a `healthcheck` CLI command for the same purpose.
+
+OpenTelemetry support is available for tracing and metrics (needs confirmation on the exact configuration keys). The health endpoint and CLI command are the primary built-in observability surfaces documented in the API spec.
+
+## Graceful shutdown
+
+The server handles `SIGTERM` and `Ctrl+C` to shut down gracefully, allowing in-flight requests and queued tasks to complete before the process exits.
+
+This means you can safely stop the server during a rolling deployment or container restart without dropping active webhook deliveries. (needs confirmation)
+
+## OpenAPI spec generation
+
+The server's REST API is described by an OpenAPI spec at `server/openapi.json`. You can regenerate this file using the `generate-openapi.sh` script included in the server directory.
+
+The spec covers all public endpoints including application management, endpoint CRUD, message sending, attempt retrieval, authentication, and the health check.

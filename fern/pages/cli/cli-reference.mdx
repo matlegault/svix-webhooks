@@ -1,0 +1,319 @@
+---
+title: "CLI Command Reference"
+---
+
+A complete reference for every `svix` CLI command, its subcommands, and available flags.
+
+## application
+
+Manage Svix applications. Each application represents one of your customers.
+
+| Subcommand | Description |
+|---|---|
+| `list` | List all applications |
+| `create` | Create a new application |
+| `get <app-id>` | Get an application by ID |
+| `update <app-id>` | Update an application |
+| `delete <app-id>` | Delete an application |
+
+**Common flags**
+
+- `--limit <n>` — Maximum number of items to return.
+- `--iterator <string>` — Cursor returned from a prior `list` call for pagination.
+- `--order <ordering>` — Sort order of returned items.
+- `--idempotency-key <key>` — Idempotency key for create operations.
+
+
+
+## endpoint
+
+Manage endpoints (destination URLs) within an application.
+
+| Subcommand | Description |
+|---|---|
+| `list <app-id>` | List the application's endpoints |
+| `create <app-id>` | Create a new endpoint |
+| `get <app-id> <endpoint-id>` | Get an endpoint |
+| `update <app-id> <endpoint-id>` | Update an endpoint |
+| `delete <app-id> <endpoint-id>` | Delete an endpoint |
+| `get-stats <app-id> <endpoint-id>` | Get delivery statistics for an endpoint |
+| `get-attempt-stats <app-id> <endpoint-id>` | Get attempt statistics for an endpoint |
+| `rotate-secret <app-id> <endpoint-id>` | Rotate the signing secret for an endpoint |
+| `recover <app-id> <endpoint-id>` | Recover failed messages for an endpoint |
+| `replay-missing <app-id> <endpoint-id>` | Replay messages that were missed |
+| `bulk-replay <app-id> <endpoint-id>` | Bulk replay messages |
+| `send-example <app-id> <endpoint-id>` | Send an example event to an endpoint |
+| `transformation` | Manage endpoint transformations |
+| `mcp-events` | Manage MCP events for an endpoint |
+
+**Flags for `list`**
+
+- `--limit <n>` — Maximum number of items to return.
+- `--iterator <string>` — Pagination cursor from a prior call.
+- `--order <ordering>` — Sort order.
+
+**Flags for `get-stats` and `get-attempt-stats`**
+
+- `--since <datetime>` — Filter to data starting from this UTC date.
+- `--until <datetime>` — Filter to data ending at this UTC date.
+
+**Flags for operations that mutate state**
+
+- `--idempotency-key <key>` — Applies to `create`, `rotate-secret`, `recover`, `replay-missing`, `bulk-replay`, and `send-example`.
+
+
+
+**Example**
+
+```bash
+svix endpoint list app_abc000000000000000000000000
+```
+
+
+
+## message / message-attempt
+
+### message
+
+Send and retrieve webhook messages within an application.
+
+| Subcommand | Description |
+|---|---|
+| `list <app-id>` | List messages for an application |
+| `create <app-id>` | Send a new message |
+| `get <app-id> <msg-id>` | Get a message |
+| `expunge-content <app-id> <msg-id>` | Remove the payload of a message |
+| `poller` | Access the message poller subcommands |
+
+**Flags for `list`**
+
+- `--limit <n>` — Maximum number of items to return.
+- `--iterator <string>` — Pagination cursor.
+- `--channel <string>` — Filter by channel.
+- `--before <datetime>` — Only include items created before this date.
+- `--after <datetime>` — Only include items created after this date.
+- `--with-content <bool>` — Include message payloads in the response. Defaults to `false` in SDK v2+.
+- `--tag <string>` — Filter messages matching this tag.
+- `--event-types <list>` — Filter by event type.
+
+
+
+### message-attempt
+
+Inspect and manage delivery attempts for messages.
+
+| Subcommand | Description |
+|---|---|
+| `list-by-endpoint <app-id> <endpoint-id>` | List attempts for an endpoint |
+| `list-by-msg <app-id> <msg-id>` | List attempts for a message |
+| `get <app-id> <msg-id> <attempt-id>` | Get a specific attempt |
+| `resend <app-id> <msg-id> <endpoint-id>` | Resend a message to an endpoint |
+| `expunge-content <app-id> <msg-id> <attempt-id>` | Remove attempt content |
+| `list-attempted-messages <app-id> <endpoint-id>` | List messages attempted to an endpoint |
+| `list-attempted-destinations <app-id> <msg-id>` | List destinations a message was attempted to |
+
+**Flags for `list-by-endpoint`**
+
+- `--limit <n>` — Maximum number of items to return.
+- `--iterator <string>` — Pagination cursor.
+- `--status <int>` — Filter by attempt status: Success (0), Pending (1), Failed (2), Sending (3), or Canceled (4).
+- `--status-code-class` — Filter by HTTP status code class.
+- `--channel <string>` — Filter by channel.
+- `--tag <string>` — Filter by tag.
+- `--before <datetime>` — Only include items created before this date.
+- `--after <datetime>` — Only include items created after this date.
+- `--with-content <bool>` — Include attempt content in the response.
+- `--with-msg <bool>` — Include message information (but not payload) in the response.
+- `--expanded-statuses <bool>` — When `true`, return Canceled (4) status; otherwise canceled attempts appear as Success (0) for backwards compatibility.
+- `--event-types <list>` — Filter by event type.
+
+**Additional flag for `list-by-msg`**
+
+- `--endpoint-id <string>` — Filter attempts to a specific endpoint.
+
+
+
+## event-type
+
+Create and manage event type definitions.
+
+| Subcommand | Description |
+|---|---|
+| `list` | Return the list of event types |
+| `create` | Create a new or unarchive an existing event type |
+| `get <event-type-name>` | Get an event type |
+| `update <event-type-name>` | Update an event type |
+| `delete <event-type-name>` | Archive or permanently delete an event type |
+| `import-openapi` | Import event types from an OpenAPI spec |
+
+**Flags for `list`**
+
+- `--limit <n>` — Maximum number of items to return.
+- `--iterator <string>` — Pagination cursor.
+- `--order <ordering>` — Sort order.
+- `--include-archived <bool>` — Include archived items. Deprecated; use `--archive-status` instead.
+- `--archive-status <status>` — Filter by archive status. Defaults to `active`.
+- `--with-content <bool>` — Include the full schema in the response.
+
+**Flags for `delete`**
+
+- `--expunge <bool>` — By default, event types are archived when deleted. Pass `true` to permanently delete them.
+
+**Flags for `create` and `import-openapi`**
+
+- `--idempotency-key <key>` — Idempotency key for the operation.
+
+
+
+**Example**
+
+```bash
+svix event-type list
+```
+
+
+
+## authentication / login
+
+### authentication
+
+Manage application-level authentication tokens and dashboard access.
+
+| Subcommand | Description |
+|---|---|
+| `app-portal-access <app-id>` | Get a magic link for the consumer app portal |
+| `dashboard-access <app-id>` | Get a magic link for the dashboard |
+| `logout <app-id>` | Expire all tokens for an application |
+| `expire-all <app-id>` | Expire all tokens for an application |
+
+
+
+### login
+
+Authenticate the CLI against a Svix server. Configuration is stored in TOML format at `~/.config/svix/config.toml`. Environment variables with the `SVIX_` prefix override stored configuration.
+
+```bash
+svix login
+```
+
+## autoconfig-subscription
+
+Manage AutoConfig subscriptions, which simplify endpoint registration for consumers.
+
+| Subcommand | Description |
+|---|---|
+| `list` | List AutoConfig subscriptions |
+| `create` | Create an AutoConfig subscription |
+| `get <id>` | Get an AutoConfig subscription |
+| `update <id>` | Update an AutoConfig subscription |
+| `delete <id>` | Delete an AutoConfig subscription |
+
+
+
+## destination / connector / ingest
+
+### destination
+
+Manage destinations where Svix Bridge routes messages.
+
+| Subcommand | Description |
+|---|---|
+| `list` | List destinations |
+| `create` | Create a destination |
+| `get <id>` | Get a destination |
+| `update <id>` | Update a destination |
+| `delete <id>` | Delete a destination |
+| `transformation` | Manage destination transformations |
+
+
+
+### connector
+
+Manage connectors that link ingest sources to destinations.
+
+| Subcommand | Description |
+|---|---|
+| `list` | List connectors |
+| `create` | Create a connector |
+| `get <id>` | Get a connector |
+| `update <id>` | Update a connector |
+| `delete <id>` | Delete a connector |
+
+
+
+### ingest
+
+Manage ingest sources and their endpoints. Ingest sources receive messages from external queues (such as Kafka, SQS, or GCP Pub/Sub) and route them into Svix.
+
+| Subcommand | Description |
+|---|---|
+| `source` | Manage ingest sources |
+| `endpoint` | Manage endpoints on an ingest source |
+| `authentication` | Manage ingest authentication |
+
+Each of these subcommands supports the standard `list`, `create`, `get`, `update`, and `delete` operations. The `endpoint` subcommand also includes a `transformation` subcommand.
+
+## environment / operational-webhook / streaming / signature / seed / wizard
+
+### environment
+
+Export and import environment configuration.
+
+| Subcommand | Description |
+|---|---|
+| `export` | Export the current environment settings |
+| `import` | Import environment settings |
+
+
+
+### operational-webhook
+
+Subscribe to and manage operational webhooks, which notify you of platform-level events.
+
+| Subcommand | Description |
+|---|---|
+| `endpoint` | Manage operational webhook endpoints |
+
+The `endpoint` subcommand supports `list`, `create`, `get`, `update`, `delete`, `get-secret`, and `rotate-secret`.
+
+### streaming
+
+Manage streaming streams, sinks, and event types for real-time message delivery.
+
+| Subcommand | Description |
+|---|---|
+| `stream` | Manage streams |
+| `sink` | Manage sinks (with `transformation` subcommand) |
+| `event-type` | Manage streaming event types |
+| `events` | Access streaming events |
+
+
+
+### signature
+
+Verify a webhook payload signature locally.
+
+```bash
+svix signature verify
+```
+
+
+
+### seed
+
+Seed your Svix environment with sample data for testing.
+
+```bash
+svix seed
+```
+
+
+
+### wizard
+
+Run a guided setup flow to configure your Svix integration. The wizard includes integration with external tools for AI agent setup.
+
+```bash
+svix wizard
+```
+
