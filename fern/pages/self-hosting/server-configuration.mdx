@@ -1,0 +1,107 @@
+---
+title: "Server Configuration Reference"
+---
+
+Look up every configuration key available to tune the self-hosted Svix server for your environment.
+
+## Configuration file location and format
+
+The Svix server reads its configuration from a TOML file. The repository ships a `config.default.toml` that lists every available key with its default value. Copy that file, rename it (for example, `config.toml`), and pass it to the server at startup.
+
+The server also accepts configuration through environment variables. Every key in the TOML file maps to an environment variable using the pattern described in the [Environment variable overrides](#environment-variable-overrides) section below.
+
+## Database settings
+
+The Svix server requires PostgreSQL. Set the connection string with the `db_dsn` key (needs confirmation):
+
+```toml
+db_dsn = "postgresql://postgres:password@localhost/svix"
+```
+
+The server runs database migrations automatically on startup, or you can run them manually with the `migrate` CLI command.
+
+## Queue backend settings
+
+The server supports multiple queue backends for dispatching webhook delivery tasks. You select the backend with the `queue_type` key. Supported values are `redis`, `rabbitmq`, and `memory` (in-process, suitable for development only).
+
+```toml
+# Use Redis as the queue backend
+queue_type = "redis"
+redis_dsn  = "redis://localhost:6379"
+```
+
+When `queue_type = "memory"`, no external queue is required, but messages are lost if the process restarts.
+
+## Cache backend settings
+
+The server supports three cache backends, selected with the `cache_type` key: `redis`, `memory`, and `none`.
+
+```toml
+# Use Redis for caching
+cache_type = "redis"
+# redis_dsn is shared with the queue backend when both use Redis
+redis_dsn  = "redis://localhost:6379"
+```
+
+- `redis` — uses the same Redis instance configured by `redis_dsn`.
+- `memory` — in-process cache; not shared across multiple server instances.
+- `none` — disables caching entirely.
+
+## JWT settings and supported algorithms
+
+All API calls require a JWT passed as `Authorization: Bearer <token>`. The server validates tokens using the secret or key material you configure.
+
+```toml
+jwt_secret = "your-secret-here"
+```
+
+The default signing algorithm is HS256. The server also supports HS384, HS512, RS256, RS384, RS512, and EdDSA.
+
+You can generate a valid token with the CLI:
+
+```sh
+svix-server jwt generate
+```
+
+You can also generate asymmetric keys for webhook payload signing with:
+
+```sh
+svix-server asymmetric-key generate
+```
+
+
+
+## Retry and timeout settings
+
+The server retries failed webhook deliveries automatically. Retry behavior and delivery timeouts are configurable in the TOML file.
+
+Endpoint-level throttling is also available. When you create or update an endpoint you can set `throttleRate` (maximum messages per second). The older `rateLimit` field is deprecated in favor of `throttleRate`.
+
+The server shuts down gracefully when it receives SIGTERM or Ctrl+C, allowing in-flight deliveries to complete.
+
+## Operational webhook settings
+
+Operational webhooks let you subscribe to platform-level events such as delivery failures. You enable and configure them in the TOML file.
+
+```toml
+# Example: point operational webhooks at a dedicated Svix application
+operational_webhook_address = "https://api.example.com"
+```
+
+When operational webhooks are enabled, the server emits events for system activity through the same delivery pipeline used for your own messages.
+
+## Environment variable overrides
+
+Every TOML configuration key can be overridden with an environment variable. The convention is to uppercase the key name and prefix it with `SVIX_`. For example (needs confirmation):
+
+| TOML key | Environment variable |
+|---|---|
+| `db_dsn` | `SVIX_DB_DSN` |
+| `jwt_secret` | `SVIX_JWT_SECRET` |
+| `redis_dsn` | `SVIX_REDIS_DSN` |
+| `queue_type` | `SVIX_QUEUE_TYPE` |
+| `cache_type` | `SVIX_CACHE_TYPE` |
+
+
+
+Environment variables take precedence over values in the TOML file, which makes them convenient for injecting secrets in containerized deployments without modifying the config file on disk.

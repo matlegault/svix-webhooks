@@ -1,0 +1,56 @@
+---
+title: "AutoConfig Tokens"
+---
+
+AutoConfig tokens let your end-users register webhook endpoints or subscribe to streams without needing direct access to your Svix API credentials.
+
+## What is an AutoConfig token?
+
+When you build a platform on top of Svix, your customers need a way to tell Svix where to deliver their webhooks. Normally that requires an API call on their behalf. AutoConfig tokens solve this by giving you a short-lived, scoped token you can hand to a customer. They use it to configure their own endpoint or stream subscription directly, without ever seeing your main API token. (needs confirmation)
+
+The Svix SDKs expose two classes for working with these tokens: `AutoConfig` (used by the producer — you) and `AutoConfigConsumer` (used by the consumer — your customer). Both v1 and v2 token formats are supported across all official SDKs.
+
+## v1 tokens (endpoint-based, deprecated)
+
+v1 tokens are prefixed with `auto_v1_` and are tied to the endpoint-based registration flow. When a consumer receives a v1 token, they use it to register a destination URL as a webhook endpoint.
+
+This format is deprecated. New integrations should use v2 tokens instead. (needs confirmation)
+
+## v2 tokens (subscription-based)
+
+v2 tokens are prefixed with `auto_v2_` and use a subscription model. Instead of registering a plain endpoint URL, the consumer subscribes to a stream or sink. This maps to the `AutoConfigConsumer` class and its `Subscribe` / `Receive` methods in the SDKs.
+
+The Go SDK exposes the following methods on `AutoConfigConsumer`:
+
+- `Subscribe(ctx)` — subscribe to the stream using the token (needs confirmation)
+- `Receive(ctx, consumerID, options)` — poll for messages (needs confirmation)
+- `Commit(ctx, consumerID, offset, options)` — acknowledge processed messages (needs confirmation)
+
+
+
+## Consumer vs. producer flows
+
+There are two sides to the AutoConfig flow. (needs confirmation)
+
+**Producer (you):** You call `NewAutoConfig(token, endpoint)` (Go) or the equivalent in your SDK to generate a token scoped to a specific application. You then pass this token to your customer out-of-band, for example in your dashboard or onboarding flow.
+
+**Consumer (your customer):** They instantiate `AutoConfigConsumer` with the token you gave them and call `Subscribe` or the equivalent method to register their endpoint or sink. They never need your main Svix API token.
+
+The same split is available in every official SDK. For example, in Python the classes are `AutoConfig` and `AutoConfigConsumer`, and in Java and Kotlin they carry the same names.
+
+## Token lifecycle and expiry
+
+AutoConfig tokens are short-lived and scoped. The Rust SDK surfaces both `AutoConfig` and `AutoConfigConsumer` and supports both v1 and v2 token formats.
+
+Regional routing is applied automatically based on the token suffix. The Go and JavaScript SDKs detect the region from the token prefix and route to the correct regional API endpoint (us, eu, in, ca, au) without any extra configuration from you or your customer.
+
+## AutoConfig vs. manual endpoint registration
+
+Without AutoConfig, you register endpoints on behalf of your customers by calling the Endpoint API directly — for example `endpoint.create(appId, endpointIn)` — using your own server-side API token.
+
+AutoConfig tokens let you delegate that step to the consumer. The trade-off is:
+
+- **Manual registration** gives you full control over endpoint configuration and keeps all API calls server-side.
+- **AutoConfig tokens** reduce the integration work for your customers and avoid exposing your main API token to them.
+
+Use AutoConfig when you want customers to self-serve their webhook destination setup. Use manual registration when you need to enforce specific endpoint settings or keep configuration entirely within your own backend. (needs confirmation)

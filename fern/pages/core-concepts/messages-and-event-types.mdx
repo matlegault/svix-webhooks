@@ -1,0 +1,79 @@
+---
+title: "Messages & Event Types"
+---
+
+Messages are the webhook payloads Svix delivers to your endpoints, and event types are the labels that categorize them.
+
+## What is a message?
+
+A message is a single webhook payload that Svix delivers to all matching endpoints registered under an application. When you send a message, Svix queues it, attempts delivery to each endpoint, and retries on failure — you make one API call and Svix handles the rest.
+
+Each message belongs to exactly one application (one per customer). Endpoints within that application receive the message if their event type filters and channel filters match.
+
+## Message payload structure
+
+You send a message by posting to `POST /api/v1/app/{app_id}/msg`. The request body is a `MessageIn` object with the following fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `eventType` | Yes | The event type name for this message |
+| `payload` | Yes | A JSON object — must be an object, not an array or scalar |
+| `eventId` | No | Optional unique identifier (used for idempotency) |
+| `channels` | No | 1–5 free-form channel identifiers for endpoint filtering |
+| `payloadRetentionPeriod` | No | Days to retain the payload (5–90, default 90) |
+| `application` | No | Optionally create the application alongside the message |
+
+The `payload` field accepts the aliases `data` and `payload` in the JSON body, and it must be a JSON object — the server rejects any payload that does not start with `{`.
+
+A minimal message request looks like this:
+
+```json
+{
+  "eventType": "user.signup",
+  "payload": {
+    "userId": "user_123",
+    "email": "user@example.com"
+  }
+}
+```
+
+Channels let you further segment delivery within an application. A message can carry up to 5 channels, and an endpoint can filter on up to 10 channels. Only endpoints whose channel filter overlaps with the message's channels receive it.
+
+## Event types and schemas
+
+Every message carries an `eventType` — a string name such as `user.signup` or `invoice.paid`. Endpoints can subscribe to a specific set of event types; if an endpoint has no filter set, it receives all event types.
+
+Event types are managed through the `event_type` endpoint module. You can define event types in advance to document the shape of your payloads and to give your customers a catalog of events they can subscribe to.
+
+When an endpoint has an event type filter, the filter must contain at least one item — an empty filter set is rejected by the server.
+
+## Idempotency keys
+
+You can set the optional `eventId` field on a message to act as an idempotency key. If you send two messages with the same `eventId` for the same application, Svix treats the second request as a duplicate and does not deliver it twice.
+
+This is useful when your producer might retry a send on network failure. Set `eventId` to a stable identifier derived from your own event — for example, a database row ID or a UUID you generate before sending. (needs confirmation)
+
+```json
+{
+  "eventId": "evt_2Cob4BaFzMsKwXnFqJlEfGhI",
+  "eventType": "invoice.paid",
+  "payload": {
+    "invoiceId": "inv_abc123",
+    "amount": 4900
+  }
+}
+```
+
+## Message retention and pruning
+
+The `payloadRetentionPeriod` field controls how many days Svix stores the message payload. The value must be between 5 and 90 days, and defaults to 90.
+
+The server exposes a `prune` CLI command for removing old message data.
+
+After the retention period expires, the payload content is no longer available, but the message record and its delivery attempts remain queryable.
+
+## Broadcast messages
+
+The `MessageIn` type supports an `application` field that lets you create an application and send a message in a single API call. If the application identified by the path's `app_id` already exists, the `application` field is ignored and the message is sent to the existing application.
+
+This pattern is useful when you want to fan out a single event to many customers without pre-creating each application separately — you send one message per customer, letting Svix create the application on first use. (needs confirmation)

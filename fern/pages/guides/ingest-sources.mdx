@@ -1,0 +1,82 @@
+---
+title: "Ingest Sources"
+---
+
+Ingest sources let you receive webhooks from third-party providers and route them into Svix for processing and delivery.
+
+## What is an ingest source?
+
+An ingest source is an inbound webhook receiver. Instead of sending webhooks outward to your customers, an ingest source accepts incoming webhooks from an external service - such as a payment provider, a CI system, or any other platform that sends webhooks - and routes those events into Svix. From there, Svix can fan them out to your endpoints just like any other message.
+
+## Supported ingest source types
+
+Svix supports ingest sources for a range of third-party providers. The Go SDK model list shows the following named provider configurations:
+
+- `AdobeSignConfig` / `AdobeSignConfigOut`
+- `AirwallexConfig` / `AirwallexConfigOut`
+- `AscendConfig` / `AscendConfigOut`
+- `BitbucketConfig` / `BitbucketConfigOut`
+- `CheckbookConfig` / `CheckbookConfigOut`
+- `DocusignConfig` / `DocusignConfigOut`
+- `EasypostConfig` / `EasypostConfigOut`
+
+Each provider config type carries the settings needed to authenticate and validate inbound payloads from that provider.
+
+## Creating an ingest source
+
+You can create and manage ingest sources through the API, the SDKs, or the CLI. (needs confirmation)
+
+**CLI**
+
+```sh
+svix ingest
+```
+
+The CLI exposes an `ingest` command group. Sub-commands cover the full lifecycle of ingest sources and their endpoints.
+
+**Go SDK**
+
+The Go SDK exposes `IngestSource` and `IngestEndpoint` types on the top-level `Svix` client.
+
+```go
+import svix "github.com/svix/svix-webhooks/v2/go"
+
+client := svix.New("YOUR_API_KEY", nil)
+
+// Use client.IngestSource and client.IngestEndpoint
+// to create and manage ingest sources.
+```
+
+**Kotlin SDK**
+
+The Kotlin SDK exposes `IngestSource` and `IngestEndpoint` as part of the `Ingest` API group.
+
+**Java SDK**
+
+The Java SDK provides an `Ingest` class for managing ingest sources and their endpoints.
+
+## Ingest endpoints and routing
+
+Each ingest source has one or more ingest endpoints. An ingest endpoint is the URL that the third-party provider sends webhooks to. When a webhook arrives at an ingest endpoint, Svix validates it and routes the payload as a message into your Svix application. (needs confirmation)
+
+The CLI module includes dedicated commands for both `ingest_source` and `ingest_endpoint`, as well as `ingest_endpoint_transformation` for applying JavaScript transformations to inbound payloads before they are routed.
+
+You can also manage ingest authentication separately via the `ingest_authentication` command group.
+
+## Viewing ingest logs
+
+Ingest activity is visible through the standard message and message attempt APIs. Once an inbound webhook is accepted by an ingest endpoint and turned into a Svix message, you can inspect delivery attempts, retry failures, and payload content the same way you would for any outbound message.
+
+Use the CLI to inspect attempts:
+
+```sh
+svix message-attempt list <app-id> <message-id>
+```
+
+## Inbound webhook verification
+
+Svix verifies inbound webhooks from third-party providers using the configuration you supply when creating an ingest source. Each provider config type carries the credentials or signing secrets needed to authenticate payloads from that provider.
+
+The `ingest_authentication` module handles the authentication lifecycle for ingest sources, including rotating credentials.
+
+If you need to apply custom logic to an inbound payload before it is routed - for example, to normalize a field or filter an event type - use an ingest endpoint transformation. Transformations are JavaScript functions you attach to an ingest endpoint.

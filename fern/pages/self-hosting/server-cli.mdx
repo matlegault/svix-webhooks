@@ -1,0 +1,77 @@
+---
+title: "Server CLI Reference"
+---
+
+Reference for every `svix-server` CLI command covering JWT generation, key management, database migrations, data pruning, and health checks.
+
+## jwt generate
+
+Use `jwt generate` to create a signed JWT for authenticating API calls against the server. The server validates JWTs signed with the configured `jwt_secret`, supporting HS256 by default as well as HS384, HS512, RS256, RS384, RS512, and EdDSA.
+
+```bash
+svix-server jwt generate
+```
+
+The command prints a token to stdout. Pass it as a Bearer token on every API request (needs confirmation):
+
+```
+Authorization: Bearer <token>
+```
+
+
+
+## asymmetric-key generate
+
+Use `asymmetric-key generate` to create an asymmetric signing key pair. Asymmetric keys let webhook consumers verify signatures without sharing a secret.
+
+```bash
+svix-server asymmetric-key generate
+```
+
+The command outputs the generated key material to stdout.
+
+## migrate
+
+Use `migrate` to run pending database migrations against the configured PostgreSQL instance. Run this command before starting the server for the first time and after each upgrade.
+
+```bash
+svix-server migrate
+```
+
+
+
+## prune
+
+Use `prune` to delete old message and attempt data from the database. This keeps the database size manageable over time.
+
+```bash
+svix-server prune
+```
+
+
+
+## wipe
+
+Use `wipe` to remove all data for an organization from the database. This is a destructive operation and cannot be undone.
+
+```bash
+svix-server wipe
+```
+
+
+
+## healthcheck
+
+Use `healthcheck` to verify that the server and its dependencies are reachable and healthy. This corresponds to the `GET /api/v1/health` REST endpoint.
+
+```bash
+svix-server healthcheck
+```
+
+
+
+## Exit codes and output formats
+
+The CLI commands write their primary output to stdout. Errors are written to stderr.
+
+The server supports graceful shutdown via SIGTERM or Ctrl+C, which applies when the server process is running rather than when invoking one-shot CLI commands.

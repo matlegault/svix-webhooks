@@ -1,0 +1,83 @@
+---
+title: "Destinations & Connectors"
+---
+
+Route webhook events to third-party services and SaaS platforms using Destinations and Connectors.
+
+## What are Destinations?
+
+A Destination is a target that receives webhook events from Svix. Instead of delivering to a raw HTTP endpoint, a Destination lets you route events to external services and data stores. Each Destination has a status, and you can patch or rotate its secret independently of your endpoints.
+
+The Go SDK exposes the following Destination-related types: `DestinationIn`, `DestinationOut`, `DestinationPatch`, `DestinationSecretRotateOut`, `DestinationStatus`, `DestinationStatusIn`, `DestinationTransformIn`, and `DestinationTransformationOut`.
+
+## Supported destination types
+
+Svix supports a wide range of destination backends. The following config types are available in the Go SDK:
+
+- **Azure Blob Storage** — `AzureBlobStorageConfigIn`, `AzureBlobStorageConfigOut`, `AzureBlobStorageConfigPatch`
+- **BigQuery** — `BigQueryConfigIn`, `BigQueryConfigOut`, `BigQueryConfigPatch`
+- **ClickHouse** — `ClickhouseConfigIn`, `ClickhouseConfigOut`, `ClickhouseConfigPatch`
+- **Elasticsearch** — `ElasticSearchConfigIn`, `ElasticSearchConfigOut`, `ElasticSearchConfigPatch`
+
+## Creating and managing destinations via API
+
+The Svix CLI exposes a `destination` command group for managing destinations, as well as a `destination_transformation` group for attaching JavaScript transformations to a destination.
+
+```sh
+svix destination --help
+```
+
+The Go SDK provides a `Destination` client. You work with it through the top-level `Svix` struct, using `DestinationIn` to create a destination and `DestinationPatch` to update one.
+
+The TypeScript SDK exposes a `Destination` class in `javascript/src/api/`.
+
+The Java SDK includes a `Destination` client under `com.svix.api`.
+
+## What are Connectors?
+
+A Connector is a pre-built integration that maps Svix webhook events to a specific third-party SaaS product. Connectors are typed by `ConnectorKind` and `ConnectorProduct`, so you pick the right connector for your target service rather than writing a custom transformation from scratch.
+
+The Go SDK exposes these Connector types: `ConnectorIn`, `ConnectorOut`, `ConnectorPatch`, `ConnectorUpsertIn`, `ConnectorKind`, and `ConnectorProduct`.
+
+Several SaaS-specific config types are also available, including:
+
+- `AdobeSignConfig` / `AdobeSignConfigOut`
+- `AirwallexConfig` / `AirwallexConfigOut`
+- `AscendConfig` / `AscendConfigOut`
+- `BitbucketConfig` / `BitbucketConfigOut`
+- `CheckbookConfig` / `CheckbookConfigOut`
+- `DocusignConfig` / `DocusignConfigOut`
+- `EasypostConfig` / `EasypostConfigOut`
+
+## Configuring a connector
+
+To create a connector, supply a `ConnectorIn` body with the appropriate `ConnectorKind` and product-specific config. To update an existing connector, use `ConnectorPatch` for a partial update or `ConnectorUpsertIn` for a full upsert.
+
+The CLI exposes a `connector` command group for these operations.
+
+```sh
+svix connector --help
+```
+
+## Listing and updating connectors
+
+You can list, get, update, and delete connectors through the same API surface used for other Svix resources. The Go SDK `Connector` client, the TypeScript `Connector` class, and the Java `Connector` client all follow the same pattern as other resource clients in their respective SDKs.
+
+The CLI `connector` command group mirrors these operations on the command line.
+
+## Using the CLI for destinations and connectors
+
+The Svix CLI provides dedicated command groups for both resources.
+
+```sh
+# Destination commands
+svix destination <subcommand>
+
+# Destination transformation commands
+svix destination-transformation <subcommand>
+
+# Connector commands
+svix connector <subcommand>
+```
+
+All CLI commands require a valid JWT passed via the `SVIX_AUTH_TOKEN` environment variable or stored in `~/.config/svix/config.toml`.

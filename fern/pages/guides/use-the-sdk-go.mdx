@@ -1,0 +1,176 @@
+---
+title: "Using the Go SDK"
+---
+
+This guide covers installing the Svix Go SDK, configuring the client, managing webhook resources, verifying signatures, and polling messages.
+
+## Installation
+
+The Go SDK requires Go 1.16 or later.
+
+Add the module to your project:
+
+```sh
+go get github.com/svix/svix-webhooks/v2/go
+```
+
+## Initialising with New(token, options)
+
+Create a client by calling `New` with your API token and an optional options struct. All API calls authenticate with a JWT passed as `Authorization: Bearer <token>`.
+
+```go
+import svix "github.com/svix/svix-webhooks/v2/go"
+
+client := svix.New("YOUR_API_KEY", nil)
+```
+
+Pass a `*svix.SvixOptions` struct as the second argument to customise the server URL or other settings. (needs confirmation)
+
+## Regional endpoint selection
+
+The SDK selects the correct regional base URL based on the suffix of your token. The supported suffixes are `us`, `eu`, `in`, `ca`, and `au`.
+
+No extra configuration is needed: pass your token to `New` and the SDK routes requests to the right region automatically. (needs confirmation)
+
+## Applications, endpoints, and messages
+
+The `Svix` client exposes typed sub-clients for each resource. The core resources are applications (one per customer), endpoints (destination URLs), and messages (webhook payloads).
+
+**Create an application:**
+
+```go
+import (
+    svix "github.com/svix/svix-webhooks/v2/go"
+    "context"
+)
+
+client := svix.New("YOUR_API_KEY", nil)
+ctx := context.Background()
+
+app, err := client.Application.Create(ctx, svix.ApplicationIn{
+    Name: "my-customer",
+}, nil)
+```
+
+**Add an endpoint to an application:**
+
+```go
+ep, err := client.Endpoint.Create(ctx, app.Id, svix.EndpointIn{
+    Url: "https://example.com/webhook",
+}, nil)
+```
+
+The `EndpointCreateOptions` struct accepts an `IdempotencyKey` field to make the call idempotent.
+
+**Send a message:**
+
+```go
+msg, err := client.Message.Create(ctx, app.Id, svix.MessageIn{
+    EventType: "invoice.paid",
+    Payload:   map[string]interface{}{"invoiceId": "inv_123"},
+}, nil)
+```
+
+**List endpoints with pagination:**
+
+Use `EndpointListOptions` to control the page size and iterator position.
+
+```go
+limit := uint64(20)
+list, err := client.Endpoint.List(ctx, app.Id, &svix.EndpointListOptions{
+    Limit: &limit,
+})
+```
+
+## Webhook verification with NewWebhook
+
+When you receive a webhook, verify the payload before processing it. Create a `Webhook` verifier with `NewWebhook`, then call `Verify` with the raw body and the request headers.
+
+The verifier accepts both `svix-*` and `webhook-*` header formats for backwards compatibility.
+
+```go
+import (
+    svix "github.com/svix/svix-webhooks/v2/go"
+    "net/http"
+    "io"
+)
+
+func handleWebhook(w http.ResponseWriter, r *http.Request) {
+    body, _ := io.ReadAll(r.Body)
+
+    wh, err := svix.NewWebhook("whsec_YOUR_ENDPOINT_SECRET")
+    if err != nil {
+        http.Error(w, "bad secret", 400)
+        return
+    }
+
+    payload, err := wh.Verify(body, r.Header)
+    if err != nil {
+        http.Error(w, "invalid signature", 400)
+        return
+    }
+
+    // payload is the verified JSON body
+    _ = payload
+    w.WriteHeader(200)
+}
+```
+
+## Message polling with MessagePoller
+
+`MessagePoller` lets you pull messages from Svix instead of receiving them over HTTP. Use `Receive` to fetch a batch of messages for a consumer, then call `Commit` to advance the offset once you have processed them.
+
+```go
+poller := client.MessagePoller()
+
+msgs, err := poller.Receive(ctx, "consumer-1", nil)
+if err != nil {
+    // handle error
+}
+
+for _, m := range msgs {
+    // process m
+}
+
+err = poller.Commit(ctx, "consumer-1", msgs[len(msgs)-1].Offset, nil)
+```
+
+## AutoConfig and AutoConfigConsumer
+
+`AutoConfig` and `AutoConfigConsumer` are hand-written helpers that simplify endpoint registration for your customers using AutoConfig tokens.
+
+Use `NewAutoConfig` on the sender side to associate a token with a destination endpoint (needs confirmation):
+
+```go
+ac, err := svix.NewAutoConfig("YOUR_AUTOCONFIG_TOKEN", "https://example.com/webhook")
+if err != nil {
+    // handle error
+}
+result, err := ac.Subscribe(ctx)
+```
+
+Use `NewAutoConfigConsumer` on the consumer side to register a streaming sink:
+
+```go
+acc, err := svix.NewAutoConfigConsumer("YOUR_AUTOCONFIG_TOKEN", sinkIn)
+if err != nil {
+    // handle error
+}
+result, err := acc.Subscribe(ctx)
+```
+
+Both helpers call `Subscribe(ctx)` to complete the registration.
+
+## Error handling
+
+All SDK methods return a Go `error` as the second return value. Check it after every call (needs confirmation):
+
+```go
+app, err := client.Application.Create(ctx, svix.ApplicationIn{Name: "acme"}, nil)
+if err != nil {
+    // inspect or log err
+    return err
+}
+```
+
+The SDK is generated code and does not wrap errors in a custom type beyond what the HTTP client provides, so inspect the error message directly for status codes and API error details.

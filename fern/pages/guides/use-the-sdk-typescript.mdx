@@ -1,0 +1,149 @@
+---
+title: "Using the TypeScript / JavaScript SDK"
+---
+
+This guide shows you how to install the Svix TypeScript SDK, configure the client, and manage applications, endpoints, and messages.
+
+## Installation
+
+Install the SDK from npm:
+
+```bash
+npm install svix
+```
+
+## Initialising the client
+
+Import the `Svix` class and pass your API token. All API calls require a JWT passed as a Bearer token, which the SDK handles for you automatically. (needs confirmation)
+
+```typescript
+import { Svix } from "svix";
+
+const svix = new Svix("YOUR_API_KEY");
+```
+
+
+
+## Regional endpoints
+
+The SDK detects your region from the token prefix and routes requests to the correct regional API endpoint (us, eu, in, ca, or au) automatically.
+
+## Managing applications
+
+Each of your customers maps to a Svix application. Create one with `application.create` (needs confirmation):
+
+```typescript
+const app = await svix.application.create({ name: "My Customer App" });
+console.log(app.id); // use this app ID for all subsequent calls
+```
+
+You can also list existing applications:
+
+```typescript
+const apps = await svix.application.list({ limit: 20 });
+```
+
+
+
+## Registering endpoints
+
+An endpoint is the destination URL that receives webhooks for an application. Create one using the app ID you received above:
+
+```typescript
+const endpoint = await svix.endpoint.create(app.id, {
+  url: "https://example.com/webhook",
+  description: "Production webhook receiver",
+});
+```
+
+When `secret` is omitted, Svix generates one automatically (recommended).
+
+You can list all endpoints for an application, with optional pagination and ordering:
+
+```typescript
+const endpoints = await svix.endpoint.list(app.id, {
+  limit: 50,
+  order: "ascending",
+});
+```
+
+
+
+## Sending messages
+
+Send a webhook to all of an application's endpoints with `message.create`. Pass the app ID, an event type, and a JSON payload (needs confirmation):
+
+```typescript
+const message = await svix.message.create(app.id, {
+  eventType: "invoice.paid",
+  payload: {
+    invoiceId: "inv_123",
+    amount: 4200,
+  },
+});
+```
+
+To guarantee exactly-once delivery, supply an idempotency key:
+
+```typescript
+const message = await svix.message.create(
+  app.id,
+  {
+    eventType: "invoice.paid",
+    payload: { invoiceId: "inv_123" },
+  },
+  { idempotencyKey: "unique-key-for-this-event" }
+);
+```
+
+
+
+## Listing message attempts
+
+Use `messageAttempt.listByMsg` to see delivery attempts for a specific message. You can filter by status, HTTP status code class, endpoint, event type, and date range:
+
+```typescript
+const attempts = await svix.messageAttempt.listByMsg(app.id, message.id, {
+  limit: 20,
+  withContent: true,
+  status: 2, // 0 = Success, 1 = Pending, 2 = Failed, 3 = Sending, 4 = Canceled
+});
+```
+
+You can also list attempts grouped by endpoint using `messageAttempt.listByEndpoint`:
+
+```typescript
+const byEndpoint = await svix.messageAttempt.listByEndpoint(app.id, endpoint.id, {
+  limit: 20,
+  withMsg: true,
+});
+```
+
+
+
+## SDK retry behaviour
+
+The SDK includes built-in retry logic with a configurable retry schedule. Failed requests are retried automatically, so you do not need to implement your own retry loop for transient errors.
+
+## Verifying incoming webhooks
+
+Use the `Webhook` class to verify the signature on payloads your server receives. Pass the endpoint secret and call `verify` with the raw request body and headers:
+
+```typescript
+import { Webhook } from "svix";
+
+const wh = new Webhook("YOUR_ENDPOINT_SECRET");
+
+try {
+  wh.verify(requestBody, {
+    "svix-id": req.headers["svix-id"],
+    "svix-timestamp": req.headers["svix-timestamp"],
+    "svix-signature": req.headers["svix-signature"],
+  });
+  // payload is valid
+} catch (err) {
+  // verification failed
+}
+```
+
+The `Webhook` class accepts both `svix-*` and `webhook-*` header variants and delegates to the `standardwebhooks` library under the hood.

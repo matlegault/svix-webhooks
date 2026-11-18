@@ -1,0 +1,91 @@
+---
+title: "Message Transformations"
+---
+
+Transformations let you reshape queue messages with JavaScript before Svix Bridge forwards them to Svix.
+
+## What is a transformation?
+
+When a message arrives from a queue (Kafka, RabbitMQ, SQS, GCP Pub/Sub, or Redis), Bridge can run a JavaScript function on the raw payload before it creates a Svix message. This lets you extract fields, rename keys, or build the exact payload shape that Svix expects — without changing the upstream producer.
+
+You attach a transformation to a sender or receiver by adding a `transformation` key to its configuration block.
+
+## Transformation function signature
+
+Your transformation must be a JavaScript function named `handler` that accepts a single argument and returns an object. Bridge calls this function once per message.
+
+```js
+function handler(input) {
+  return {
+    appId: input.payload.tenantId,
+    message: {
+      eventType: input.payload.eventType,
+      payload: input.payload.data,
+    },
+  };
+}
+```
+
+If the function returns a value that Bridge cannot interpret as a plain object, the message is nacked and not forwarded.
+
+## Input and output shapes
+
+The `input` argument your function receives depends on the queue backend and the `transformation` format setting. Two formats are available: `payload` (the default) and `string`.
+
+For Kafka specifically, the `kafka_transformation_input` config key controls whether the function receives just the message payload or the full envelope (including metadata such as topic and offset). The default is `payload`.
+
+```yaml
+# Kafka sender example
+kafka_transformation_input: envelope   # or: payload (default)
+```
+
+Your function must return an object that Bridge can use to construct a `CreateMessageRequest`. At minimum this means providing the fields Svix needs to create a message (for example, `appId` and `message`).
+
+## String vs. JSON format (Redis limitation)
+
+Most queue backends let you choose between two transformation input formats:
+
+- **JSON format** — Bridge parses the raw message as JSON and passes the resulting object to your function.
+- **String format** — Bridge passes the raw message bytes as a string to your function.
+
+**Redis only supports JSON-formatted transformations.** If you configure a string-format transformation on a Redis source, it will not work. String format is supported on all other queue backends (Kafka, RabbitMQ, SQS, GCP Pub/Sub).
+
+## Choosing a JS engine (Deno vs. QuickJS)
+
+Bridge ships with two JavaScript execution engines. You select one with the top-level `js_engine` config key (needs confirmation):
+
+| Value | Engine |
+|---|---|
+| `deno` | Deno runtime |
+| `quickjs` | QuickJS (embedded, lighter weight) |
+| `both` | Run both engines in parallel (see below) |
+
+
+
+```yaml
+js_engine: deno
+```
+
+The active engine is also reported by the `GET /health` endpoint in the `js_backend` field of the response.
+
+## Running both engines for validation
+
+Setting `js_engine: both` runs your transformation through Deno and QuickJS simultaneously. This is useful when you are migrating between engines and want to confirm that both produce identical output before committing to one.
+
+```yaml
+js_engine: both
+```
+
+Use `both` in a staging environment rather than production, since it doubles the compute cost of every transformation.
+
+## Debugging transformations
+
+When a transformation fails, Bridge nacks the delivery so the message is not lost. The failure reason is logged via `tracing`.
+
+Possible failure modes to check:
+
+- The function returned a non-object value — Bridge logs `"transformation produced unexpected value"`.
+- The transformation channel failed — Bridge logs `"transformation rx failed"` or `"transformation execution failed"`.
+- The message could not be parsed as JSON when using JSON format — the delivery is nacked before the function is called.
+
+To iterate quickly, run Bridge locally with `js_engine: both` and send sample messages to the queue. Watch the structured logs for the `messaging.operation = "process"` span, which wraps the full parse-transform-forward cycle.

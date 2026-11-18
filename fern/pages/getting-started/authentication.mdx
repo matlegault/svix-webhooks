@@ -1,0 +1,75 @@
+---
+title: "Authentication"
+---
+
+Every Svix API call requires a JWT passed as a bearer token in the `Authorization` header.
+
+## Bearer token overview
+
+All requests to the Svix API must include the following header:
+
+```http
+Authorization: Bearer YOUR_API_TOKEN
+```
+
+The server validates the JWT against the `jwt_secret` you configure at startup. Without a valid token, every request returns an authentication error.
+
+## Generating a token with the CLI
+
+The Svix server ships with a built-in command for generating tokens:
+
+```bash
+svix-server jwt generate
+```
+
+Run this command on the same machine where the server is configured so it can read the correct `jwt_secret`. The output is a signed JWT you can use immediately as your bearer token.
+
+The CLI also exposes an `authentication` subcommand for managing tokens against a running server (needs confirmation):
+
+```bash
+svix authentication
+```
+
+
+
+## Generating a token from the dashboard
+
+You can generate tokens from the Svix dashboard without using the CLI. Log in to the dashboard, navigate to your organization settings, and create a new API token there. Copy the token immediately — it is not shown again.
+
+## Supported signing algorithms
+
+The server defaults to **HS256** (HMAC-SHA256) for signing JWTs. The following algorithms are also supported (needs confirmation):
+
+- `HS384` (needs confirmation)
+- `HS512` (needs confirmation)
+- `RS256` (needs confirmation)
+- `RS384` (needs confirmation)
+- `RS512` (needs confirmation)
+- `EdDSA` (needs confirmation)
+
+
+
+Choose a symmetric algorithm (HS*) when you control both the token issuer and the server. Use an asymmetric algorithm (RS* or EdDSA) when you need to verify tokens with a public key without sharing the signing secret.
+
+## Configuring jwt_secret on the server
+
+Set `jwt_secret` in your server configuration before starting the server. Every token you generate must be signed with this secret, and the server rejects tokens signed with any other value. (needs confirmation)
+
+```toml
+# svix-server configuration
+jwt_secret = "YOUR_JWT_SECRET"
+```
+
+For asymmetric algorithms, set the corresponding key material in place of a shared secret. The `svix-server asymmetric-key generate` command can produce a compatible key pair.
+
+## Regional endpoints and token prefixes
+
+When using Svix Cloud, tokens are scoped to a specific regional endpoint. Use the token that matches the region your organization was provisioned in. Sending a token to the wrong regional endpoint will result in an authentication failure.
+
+The CLI stores your active server URL and token in `~/.config/svix/config.toml`. You can override these at runtime with environment variables using the `SVIX_` prefix.
+
+## Token expiry and rotation
+
+JWTs issued by `svix-server jwt generate` include an expiry claim. When a token expires, requests return an authentication error and you must generate a new token.
+
+To rotate a token, generate a new one and update every client that uses the old token. There is no server-side token revocation list, so the old token remains valid until its expiry time passes. Plan rotations around your token lifetime to avoid a gap in access.

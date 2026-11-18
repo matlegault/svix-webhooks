@@ -1,0 +1,72 @@
+---
+title: "What is Svix?"
+---
+
+Svix is an enterprise-ready webhooks-as-a-service platform that handles webhook delivery, retries, security, and endpoint management so you don't have to build it yourself.
+
+## What Svix is
+
+Svix makes it easy for developers to send webhooks. You make one API call, and Svix takes care of deliverability, retries, security, and more.
+
+The platform is built around a self-hostable server written in Rust, backed by PostgreSQL. You can run it yourself or use the managed Svix cloud service.
+
+## Core use cases
+
+- **Sending webhooks to your customers** - You call the Svix API once per event; Svix queues the message, attempts delivery, and retries on failure.
+- **Endpoint management** - Your customers register destination URLs (endpoints) through your UI or directly via Svix.
+- **Webhook verification** - Svix signs every payload with HMAC-SHA256 so your customers can verify authenticity. Asymmetric signing is also supported.
+- **Operational visibility** - You can inspect delivery attempts, replay failed messages, and subscribe to platform events via operational webhooks.
+
+## Key concepts at a glance
+
+| Concept | What it is |
+|---|---|
+| **Application** | One logical tenant, typically one per customer. |
+| **Endpoint** | A destination URL that belongs to an application. |
+| **Message** | The webhook payload you send through the API. |
+| **Event type** | A named schema for a category of messages. |
+| **Message attempt** | A single delivery try for a message to an endpoint. |
+| **Idempotency key** | A caller-supplied key that prevents duplicate sends. |
+| **AutoConfig token** | A short-lived token that lets a consumer register their own endpoint without a full API key. |
+| **Operational webhook** | A platform event (e.g., delivery failure) that Svix itself sends to a subscriber. |
+
+
+
+## Platform components: server, SDKs, CLI, Bridge
+
+**Server** - The core Rust service exposes a REST API for managing applications, endpoints, messages, and delivery attempts. Key routes include `POST /api/v1/app`, `POST /api/v1/app/{app_id}/endpoint`, `POST /api/v1/app/{app_id}/msg`, and `GET /api/v1/health`. It supports multiple queue backends (Redis, RabbitMQ, in-memory) and cache backends (Redis, memory, none).
+
+**SDKs** - Official client libraries are available for Go, Python, TypeScript/JavaScript, Java, Kotlin, Ruby, C# (.NET), Rust, and PHP. Every SDK covers the full API surface and includes webhook verification helpers.
+
+**CLI** - The `svix-server` binary ships with CLI commands for generating JWTs (`svix-server jwt generate`), generating asymmetric keys, running database migrations, pruning old messages, and wiping an org.
+
+**Svix Bridge** - Bridge routes messages from external queues (Kafka, RabbitMQ, SQS, GCP Pub/Sub, Redis) into Svix, and can forward Svix events back out to those same systems.
+
+## Self-hosted vs. managed
+
+You can run the Svix server yourself using the Docker image (`svix/svix-server`) or use the managed cloud service at svix.com. Both expose the same REST API.
+
+All API calls require a JWT passed as `Authorization: Bearer <token>`. The server validates JWTs signed with a configured `jwt_secret`. HS256 is the default; HS384, HS512, RS256, RS384, RS512, and EdDSA are also supported.
+
+## Supported languages and environments
+
+All nine official SDKs support the full API and webhook verification:
+
+- Go
+- Python
+- TypeScript / JavaScript
+- Java
+- Kotlin (includes coroutine support)
+- Ruby
+- C# (.NET)
+- Rust
+- PHP (requires PHP >= 8.1)
+
+The Go module is versioned at `github.com/svix/svix-webhooks/v2` and requires Go 1.21 or later.
+
+## Where to go next
+
+- **Quickstart** - Send your first webhook in minutes. (needs confirmation)
+- **Self-hosting** - Deploy the Svix server with Docker and PostgreSQL. (needs confirmation)
+- **Webhook verification** - Learn how to verify incoming webhook signatures in your chosen language. (needs confirmation)
+- **Svix Bridge** - Connect Svix to your existing message queues. (needs confirmation)

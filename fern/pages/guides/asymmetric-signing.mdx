@@ -1,0 +1,74 @@
+---
+title: "Asymmetric Signing"
+---
+
+Asymmetric signing lets you sign webhooks with a private key so receivers can verify signatures using only a public key, without sharing any secret.
+
+## When to use asymmetric signing
+
+By default, Svix signs webhook payloads with HMAC-SHA256 using a shared secret per endpoint. Both sides must hold the same secret, which means you need a secure channel to distribute it.
+
+With asymmetric signing, you hold the private key on the server and publish the public key openly. Receivers verify signatures without ever seeing the private key. This is useful when (needs confirmation):
+
+- You want receivers to verify signatures without you distributing a secret to each one. (needs confirmation)
+- You need to publish a single well-known public key for all consumers. (needs confirmation)
+- Your security policy prohibits sharing symmetric secrets with third parties. (needs confirmation)
+
+## Generating a key pair with the CLI
+
+The Svix server CLI includes an `asymmetric-key generate` command for creating a key pair.
+
+```bash
+svix-server asymmetric-key generate
+```
+
+This outputs a private key and a corresponding public key. Store the private key securely and never share it. The public key is what you distribute to webhook receivers. (needs confirmation)
+
+## Configuring the server
+
+Once you have a key pair, configure the Svix server to use the private key for signing. Set the relevant key configuration in your server configuration so that outgoing webhooks are signed asymmetrically rather than with HMAC-SHA256.
+
+The server supports multiple JWT signing algorithms including RS256, RS384, RS512, and EdDSA in addition to the default HS256 family.
+
+## Publishing the public key
+
+After generating the key pair, publish the public key so receivers can use it to verify incoming webhook signatures. Common approaches include (needs confirmation):
+
+- Hosting it at a well-known URL on your domain, such as `https://yourdomain.com/.well-known/webhooks-public-key`. (needs confirmation)
+- Including it in your developer documentation. (needs confirmation)
+- Returning it from a dedicated API endpoint. (needs confirmation)
+
+Receivers only need the public key. They do not need access to your Svix server or any shared secret.
+
+## Verifying asymmetric signatures in receivers
+
+Svix webhook deliveries include signature headers that receivers use to verify authenticity. The standard headers are `svix-id`, `svix-signature`, and `svix-timestamp`. The unbranded equivalents `webhook-id`, `webhook-signature`, and `webhook-timestamp` are also supported for backwards compatibility.
+
+For symmetric verification, the Go SDK provides `NewWebhook` and `Verify`:
+
+```go
+wh, err := svix.NewWebhook("whsec_YOUR_SECRET")
+if err != nil {
+    log.Fatal(err)
+}
+err = wh.Verify(payload, headers)
+```
+
+
+
+For asymmetric verification, your receiver should use the public key you published to verify the signature in the `svix-signature` header against the signed content, which is formatted as `{svix-id}.{svix-timestamp}.{body}`.
+
+The signature version prefix in the header is `v1`. When iterating over multiple signatures in the header (space-separated), skip any that do not carry the `v1` prefix.
+
+The timestamp tolerance for signature validity is 5 minutes. Reject messages whose `svix-timestamp` falls outside that window to prevent replay attacks.
+
+## Key rotation
+
+To rotate your asymmetric key pair:
+
+1. Generate a new key pair with `svix-server asymmetric-key generate`.
+2. Update your server configuration to use the new private key. (needs confirmation)
+3. Publish the new public key alongside the old one during a transition window. (needs confirmation)
+4. Once all receivers have updated to the new public key, remove the old one. (needs confirmation)
+
+During the transition window, Svix may include multiple signatures in the `svix-signature` header separated by spaces. Receivers should accept a message if any of the provided signatures matches a known public key.

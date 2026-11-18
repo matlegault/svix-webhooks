@@ -1,0 +1,55 @@
+---
+title: "Delivery & Retries"
+---
+
+Svix automatically retries failed webhook deliveries and gives you full visibility into every attempt.
+
+## Delivery lifecycle
+
+When you send a message via `POST /api/v1/app/{app_id}/msg`, Svix queues it and begins delivering it to every matching endpoint registered on that application. Each delivery attempt is recorded as a `MessageAttempt`.
+
+Each attempt captures:
+
+- The destination URL at the time of delivery
+- The HTTP response body and status code
+- The response duration in milliseconds
+- The attempt status and a human-readable `statusText`
+- The trigger type (automatic or manual replay)
+- A `nextAttempt` timestamp when a retry is scheduled
+
+A message is considered in-flight (`Sending`) as long as a `nextAttempt` is set. Once all retries are exhausted, the attempt is marked with its final status.
+
+## Retry schedule and backoff
+
+Svix retries delivery automatically when an endpoint returns a non-2xx response or is unreachable. The server uses a configurable retry schedule with backoff.
+
+Endpoints can also be configured with a `throttleRate` (maximum messages per second) to control how fast Svix delivers to them. Outgoing messages are throttled to that rate.
+
+## Message attempt statuses
+
+Each `MessageAttempt` has a `status` field and a corresponding `statusText`. The `EndpointMessageOut` model combines the message with its latest attempt status so you can see the current delivery state at a glance.
+
+You can list attempts for a message or for an endpoint using the attempt endpoints (needs confirmation):
+
+- `GET /api/v1/app/{app_id}/attempt` — list all attempts for an application
+- `GET /api/v1/app/{app_id}/msg/{msg_id}` — retrieve a specific message and its status
+
+The `trigger_type` field on each attempt tells you whether the delivery was triggered automatically by the system or manually by a replay request.
+
+## Manual replay
+
+You can replay a message to a specific endpoint at any time. Svix records the new attempt with a `trigger_type` that marks it as manually triggered, so you can distinguish replays from automatic retries in your attempt history.
+
+The attempt API exposes `post_with` routes alongside the standard `get_with` and `delete_with` routes, which is how replay is surfaced.
+
+## Configurable timeouts
+
+The server supports configurable timeouts for message delivery. This lets you control how long Svix waits for a response from an endpoint before treating the attempt as failed and scheduling a retry.
+
+Messages also have a `payloadRetentionPeriod` field (between 5 and 90 days) that controls how long the payload is stored and available for replay.
+
+## Operational webhooks for delivery events
+
+Svix can emit operational webhooks when delivery events occur, such as a message failing all retries. You can subscribe to these platform events to build alerting or monitoring on top of your webhook infrastructure.
+
+Operational webhooks follow the same attempt and retry model as regular messages, so the same attempt history and replay tools apply to them.

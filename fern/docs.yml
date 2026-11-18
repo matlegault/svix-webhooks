@@ -1,0 +1,150 @@
+instances:
+- url: mathieu-s-org.docs.buildwithfern.com
+title: Svix
+colors:
+  accent-primary:
+    light: '#2c70ff'
+    dark: '#2c70ff'
+  background:
+    light: '#f9fbff'
+    dark: '#02060d'
+  border:
+    light: '#cbd0da'
+    dark: '#282d37'
+logo:
+  light: logo-light.png
+  dark: logo-dark.png
+  height: 20
+favicon: logo-light.png
+tabs:
+  docs:
+    display-name: Docs
+    skip-slug: true
+  api:
+    display-name: API Reference
+    skip-slug: true
+layout:
+  tabs-placement: header
+  searchbar-placement: header
+navigation:
+- tab: docs
+  layout:
+  - section: Getting Started
+    slug: getting-started
+    contents:
+    - page: What is Svix?
+      path: ./pages/getting-started/overview.mdx
+      slug: overview
+    - page: Quickstart
+      path: ./pages/getting-started/quickstart.mdx
+      slug: quickstart
+    - page: Authentication
+      path: ./pages/getting-started/authentication.mdx
+      slug: authentication
+  - section: Core Concepts
+    slug: core-concepts
+    contents:
+    - page: Applications & Endpoints
+      path: ./pages/core-concepts/applications-and-endpoints.mdx
+      slug: applications-and-endpoints
+    - page: Messages & Event Types
+      path: ./pages/core-concepts/messages-and-event-types.mdx
+      slug: messages-and-event-types
+    - page: Delivery & Retries
+      path: ./pages/core-concepts/delivery-retries.mdx
+      slug: delivery-retries
+    - page: Webhook Signatures
+      path: ./pages/core-concepts/webhook-signatures.mdx
+      slug: webhook-signatures
+    - page: AutoConfig Tokens
+      path: ./pages/core-concepts/autoconfig-tokens.mdx
+      slug: autoconfig-tokens
+    - page: Operational Webhooks
+      path: ./pages/core-concepts/operational-webhooks.mdx
+      slug: operational-webhooks
+  - section: Guides
+    slug: guides
+    contents:
+    - page: Verifying Incoming Webhooks
+      path: ./pages/guides/verify-webhooks.mdx
+      slug: verify-webhooks
+    - page: Asymmetric Signing
+      path: ./pages/guides/asymmetric-signing.mdx
+      slug: asymmetric-signing
+    - page: Handling Errors & Rate Limits
+      path: ./pages/guides/handle-errors.mdx
+      slug: handle-errors
+    - page: Using the TypeScript / JavaScript SDK
+      path: ./pages/guides/use-the-sdk-typescript.mdx
+      slug: use-the-sdk-typescript
+    - page: Using the Python SDK
+      path: ./pages/guides/use-the-sdk-python.mdx
+      slug: use-the-sdk-python
+    - page: Using the Go SDK
+      path: ./pages/guides/use-the-sdk-go.mdx
+      slug: use-the-sdk-go
+    - page: Using the Java & Kotlin SDKs
+      path: ./pages/guides/use-the-sdk-java-kotlin.mdx
+      slug: use-the-sdk-java-kotlin
+    - page: Using the C#, Ruby, PHP & Rust SDKs
+      path: ./pages/guides/use-the-sdk-other.mdx
+      slug: use-the-sdk-other
+    - page: Integrating AutoConfig
+      path: ./pages/guides/autoconfig-integration.mdx
+      slug: autoconfig-integration
+    - page: Destinations & Connectors
+      path: ./pages/guides/destinations-and-connectors.mdx
+      slug: destinations-and-connectors
+    - page: Ingest Sources
+      path: ./pages/guides/ingest-sources.mdx
+      slug: ingest-sources
+  - section: Self-Hosting
+    slug: self-hosting
+    contents:
+    - page: Server Overview
+      path: ./pages/self-hosting/server-overview.mdx
+      slug: server-overview
+    - page: Server Configuration Reference
+      path: ./pages/self-hosting/server-configuration.mdx
+      slug: server-configuration
+    - page: Server CLI Reference
+      path: ./pages/self-hosting/server-cli.mdx
+      slug: server-cli
+  - section: Svix Bridge
+    slug: svix-bridge
+    contents:
+    - page: Bridge Overview
+      path: ./pages/svix-bridge/bridge-overview.mdx
+      slug: bridge-overview
+    - page: Configuring Bridge
+      path: ./pages/svix-bridge/bridge-configuration.mdx
+      slug: bridge-configuration
+    - page: Message Transformations
+      path: ./pages/svix-bridge/bridge-transformations.mdx
+      slug: bridge-transformations
+  - section: CLI
+    slug: cli
+    contents:
+    - page: CLI Overview
+      path: ./pages/cli/cli-overview.mdx
+      slug: cli-overview
+    - page: Local Webhook Forwarding (listen)
+      path: ./pages/cli/cli-listen.mdx
+      slug: cli-listen
+    - page: CLI Command Reference
+      path: ./pages/cli/cli-reference.mdx
+      slug: cli-reference
+  - section: Changelog
+    slug: changelog
+    contents:
+    - page: Changelog
+      path: ./pages/changelog/changelog.mdx
+      slug: changelog
+- tab: api
+  layout:
+  - api: Svix API
+    api-name: svix-api
+    slug: svix-api
+  - api: Svix Server API
+    api-name: svix-server-api
+    slug: svix-server-api

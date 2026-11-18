@@ -1,0 +1,32 @@
+name: fern-check
+
+on:
+  pull_request:
+    paths:
+      - 'fern/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'fern/**'
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          # The repo's package.json may declare a packageManager (e.g. pnpm) that setup-node would
+          # try to cache for and fail on when it isn't installed; the Fern CLI needs no such cache.
+          package-manager-cache: false
+
+      - name: Setup Fern CLI
+        uses: fern-api/setup-fern-cli@v1
+
+      - name: Check API is valid
+        run: fern check

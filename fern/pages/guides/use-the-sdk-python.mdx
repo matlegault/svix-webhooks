@@ -1,0 +1,140 @@
+---
+title: "Using the Python SDK"
+---
+
+Install the Svix Python SDK, configure sync and async clients, send messages, and verify incoming webhooks.
+
+## Installation
+
+Install the `svix` package from PyPI:
+
+```bash
+pip install svix
+```
+
+## Sync client (Svix)
+
+Import `Svix` and initialize it with your API token. The token is passed as a `Bearer` header on every request.
+
+```python
+from svix.api import Svix, SvixOptions
+
+svix = Svix("YOUR_API_KEY")
+```
+
+All API resources — applications, endpoints, messages, event types, and more — are available as attributes on the `Svix` instance.
+
+## Async client (SvixAsync)
+
+`SvixAsync` exposes the same API surface as `Svix` but with `async`/`await` support. Use it inside any async framework such as FastAPI or asyncio.
+
+```python
+import asyncio
+from svix.api import SvixAsync, SvixOptions
+
+async def main():
+    svix = SvixAsync("YOUR_API_KEY")
+    # all methods are awaitable
+    apps = await svix.application.list()
+
+asyncio.run(main())
+```
+
+## SvixOptions and regional endpoints
+
+Pass a `SvixOptions` object as the second argument to point the client at a different base URL, such as a self-hosted server or a regional endpoint.
+
+```python
+from svix.api import Svix, SvixOptions
+
+options = SvixOptions(server_url="https://api.eu.svix.com")
+svix = Svix("YOUR_API_KEY", options)
+```
+
+The underlying `Client` strips trailing slashes from `base_url` automatically, so `https://api.svix.com/` and `https://api.svix.com` are treated identically.
+
+## Managing applications and endpoints
+
+In Svix, each of your customers maps to an **application**. An **endpoint** is a destination URL within that application. Use `ApplicationIn` and `EndpointIn` models to create them.
+
+```python
+from svix.api import Svix
+from svix.models import ApplicationIn, EndpointIn
+
+svix = Svix("YOUR_API_KEY")
+
+# Create an application for a customer
+app = svix.application.create(ApplicationIn(name="Customer A"))
+
+# Add a destination endpoint to that application
+endpoint = svix.endpoint.create(
+    app.id,
+    EndpointIn(url="https://example.com/webhooks")
+)
+```
+
+You can also patch or upsert applications and endpoints using `ApplicationPatch` and `EndpointPatch` / `EndpointUpsertIn`.
+
+## Sending messages
+
+Send a webhook by creating a `MessageIn` and calling `svix.message.create`. Svix handles delivery, retries, and signing.
+
+```python
+from svix.models import MessageIn
+
+msg = svix.message.create(
+    app.id,
+    MessageIn(
+        event_type="invoice.paid",
+        payload={"invoice_id": "inv_123", "amount": 4200}
+    )
+)
+print(msg.id)
+```
+
+To send multiple messages in one call, use `BatchCreateMessagesIn`.
+
+## Webhook verification
+
+When your server receives a webhook from Svix, verify the signature before processing the payload. Import `Webhook` and `WebhookVerificationError` from `svix.webhooks`.
+
+```python
+from svix.webhooks import Webhook, WebhookVerificationError
+
+wh = Webhook("whsec_YOUR_ENDPOINT_SECRET")
+
+try:
+    wh.verify(request_body, request_headers)
+    # payload is authentic — process it
+except WebhookVerificationError:
+    # signature check failed — reject the request
+    pass
+```
+
+`Webhook.verify` accepts the raw request body as `bytes` or `str` and a dictionary of headers. It normalises both `svix-*` and `webhook-*` header names, so it works with both Svix-native and Standard Webhooks header formats.
+
+The headers the method looks for are:
+
+- `svix-id` / `webhook-id` — unique message ID
+- `svix-signature` / `webhook-signature` — HMAC-SHA256 signature
+- `svix-timestamp` / `webhook-timestamp` — Unix timestamp of delivery
+
+## Error handling
+
+The SDK exposes `HttpError` and `HTTPValidationError` for API-level failures. Catch them around any API call:
+
+```python
+from svix.api import Svix
+from svix.api.errors import HttpError, HTTPValidationError
+
+svix = Svix("YOUR_API_KEY")
+
+try:
+    app = svix.application.get("app_nonexistent")
+except HttpError as e:
+    print(f"API error: {e}")
+except HTTPValidationError as e:
+    print(f"Validation error: {e}")
+```
+
+For webhook verification failures, catch `WebhookVerificationError` as shown in the verification section above.

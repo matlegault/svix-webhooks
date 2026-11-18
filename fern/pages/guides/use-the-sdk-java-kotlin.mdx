@@ -1,0 +1,212 @@
+---
+title: "Using the Java & Kotlin SDKs"
+---
+
+This guide shows you how to add the Java or Kotlin SDK to a JVM project, send webhooks, verify signatures, and handle AutoConfig flows.
+
+## Adding the dependency (Maven / Gradle)
+
+The Java and Kotlin SDKs are separate libraries published to Maven Central. Add the one that matches your project language. (needs confirmation)
+
+**Maven (Java)**
+
+```xml
+<dependency>
+  <groupId>com.svix</groupId>
+  <artifactId>svix</artifactId>
+  <version><!-- check Maven Central for the latest --></version>
+</dependency>
+```
+
+**Gradle (Kotlin)**
+
+```kotlin
+implementation("com.svix.kotlin:svix-kotlin:<!-- check Maven Central for the latest -->")
+```
+
+`java/lib/src/main/java/com/svix/api/`
+
+## Initialising SvixOptions and Svix client
+
+Both SDKs expose a top-level `Svix` class. Pass your API token and an optional `SvixOptions` object to configure the base URL or other settings. (needs confirmation)
+
+**Java**
+
+```java
+import com.svix.Svix;
+import com.svix.SvixOptions;
+
+SvixOptions options = new SvixOptions();
+// options.setServerUrl("https://api.svix.com"); // override if self-hosting
+Svix svix = new Svix("YOUR_API_KEY", options);
+```
+
+**Kotlin**
+
+```kotlin
+import com.svix.kotlin.Svix
+import com.svix.kotlin.SvixOptions
+
+val options = SvixOptions()
+val svix = Svix("YOUR_API_KEY", options)
+```
+
+`java/lib/src/main/java/com/svix/api/`
+
+## Managing applications and endpoints
+
+Every customer in Svix is represented by an **application**. Endpoints are the destination URLs attached to an application. (needs confirmation)
+
+**Java — create an application and an endpoint**
+
+```java
+import com.svix.models.ApplicationIn;
+import com.svix.models.ApplicationOut;
+import com.svix.models.EndpointIn;
+import com.svix.models.EndpointOut;
+
+ApplicationIn appIn = new ApplicationIn().name("My Customer");
+ApplicationOut app = svix.getApplication().create(appIn);
+
+EndpointIn epIn = new EndpointIn().url("https://example.com/webhook");
+EndpointOut ep = svix.getEndpoint().create(app.getId(), epIn);
+```
+
+**Kotlin — create an application and an endpoint**
+
+```kotlin
+import com.svix.kotlin.models.ApplicationIn
+import com.svix.kotlin.models.EndpointIn
+
+val app = svix.application.create(ApplicationIn(name = "My Customer"))
+val ep  = svix.endpoint.create(app.id, EndpointIn(url = "https://example.com/webhook"))
+```
+
+You can also list, get, update, upsert, and delete endpoints. The `Endpoint` class exposes `list`, `get`, `create`, `upsert`, and `delete` methods. `create` accepts an optional `EndpointCreateOptions` that carries an `idempotencyKey` field.
+
+## Sending messages
+
+A **message** is the webhook payload dispatched to all of an application's endpoints. Use `Message.create` to send one.
+
+**Java**
+
+```java
+import com.svix.models.MessageIn;
+import com.svix.models.MessageOut;
+import com.svix.api.MessageCreateOptions;
+
+MessageIn msgIn = new MessageIn()
+    .eventType("invoice.paid")
+    .payload("{\"invoiceId\": \"inv_123\"}");
+
+MessageCreateOptions opts = new MessageCreateOptions();
+opts.setIdempotencyKey("unique-key-for-this-send");
+
+MessageOut msg = svix.getMessage().create(app.getId(), msgIn, opts);
+```
+
+**Kotlin**
+
+```kotlin
+import com.svix.kotlin.models.MessageIn
+import com.svix.kotlin.MessageCreateOptions
+
+val msg = svix.message.create(
+    app.id,
+    MessageIn(eventType = "invoice.paid", payload = mapOf("invoiceId" to "inv_123")),
+    MessageCreateOptions(idempotencyKey = "unique-key-for-this-send")
+)
+```
+
+By default, message payloads are **excluded** from the response in v2+ of the SDKs. Pass `withContent = true` in `MessageCreateOptions` if you need the payload echoed back.
+
+## Webhook verification (Java 8 and Java 11+)
+
+Use the `Webhook` class to verify that an incoming request genuinely came from Svix. Verification uses HMAC-SHA256 and rejects messages whose timestamp is more than 5 minutes old.
+
+The SDK ships two variants of `Webhook` for Java:
+
+- **Java 8** (`com.svix.Webhook`) — accepts a `Map<String, List<String>>` of headers.
+- **Java 11+** (`com.svix.Webhook` from the `java11` source set) — adds an overload that accepts `java.net.http.HttpHeaders` directly.
+
+
+
+**Java 8 — verify a request**
+
+```java
+import com.svix.Webhook;
+
+Webhook wh = new Webhook("whsec_YOUR_ENDPOINT_SECRET");
+// headers is a Map<String, List<String>> from your HTTP framework
+wh.verify(requestBodyString, headers);
+```
+
+**Java 11+ — verify using HttpHeaders**
+
+```java
+import com.svix.Webhook;
+import java.net.http.HttpHeaders;
+
+Webhook wh = new Webhook("whsec_YOUR_ENDPOINT_SECRET");
+wh.verify(requestBodyString, httpHeaders); // HttpHeaders overload
+```
+
+
+
+**Kotlin — verify a request**
+
+```kotlin
+import com.svix.kotlin.Webhook
+import java.net.http.HttpHeaders
+
+val wh = Webhook("whsec_YOUR_ENDPOINT_SECRET")
+wh.verify(requestBodyString, httpHeaders)
+```
+
+The Kotlin `Webhook` class accepts both branded (`svix-id`, `svix-signature`, `svix-timestamp`) and unbranded (`webhook-id`, `webhook-signature`, `webhook-timestamp`) header formats, falling back to the unbranded set automatically.
+
+## AutoConfig token flows
+
+AutoConfig lets your customers register their own endpoints without you writing custom UI. You generate a token and hand it to the consumer; the consumer's client uses it to configure their endpoint or sink. (needs confirmation)
+
+The SDK supports both v1 tokens (prefixed `auto_v1_`) and v2 tokens (prefixed `auto_v2_`).
+
+**Java — generate an AutoConfig token**
+
+```java
+// Generate a one-time token for a specific application
+String token = svix.getAutoConfig().generateToken(app.getId());
+// Hand `token` to your customer's frontend or CLI
+```
+
+**Kotlin — consume an AutoConfig token**
+
+```kotlin
+// On the consumer side, exchange the token for endpoint details
+val consumer = svix.autoConfigConsumer
+consumer.configure(token, sinkOrEndpointConfig)
+```
+
+`java/lib/src/main/java/com/svix/api/`
+
+## Background tasks and statistics
+
+Long-running operations such as bulk replays return a background task reference. You can poll the `BackgroundTask` API to check their status. (needs confirmation)
+
+**Java**
+
+```java
+import com.svix.models.BackgroundTaskOut;
+
+BackgroundTaskOut task = svix.getBackgroundTask().get(taskId);
+System.out.println(task.getStatus());
+```
+
+**Kotlin**
+
+```kotlin
+val task = svix.backgroundTask.get(taskId)
+println(task.status)
+```
+
+The `Statistics` API lets you retrieve aggregate delivery stats per application or endpoint.

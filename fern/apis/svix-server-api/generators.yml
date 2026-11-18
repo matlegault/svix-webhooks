@@ -1,0 +1,3 @@
+api:
+  specs:
+  - openapi: ../../../server/openapi.json

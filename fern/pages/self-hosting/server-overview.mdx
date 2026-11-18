@@ -1,0 +1,70 @@
+---
+title: "Server Overview"
+---
+
+The Svix server is a self-hostable Rust application that handles webhook delivery, retries, signing, and endpoint management, backed by PostgreSQL and a choice of queue and cache backends.
+
+## Architecture overview
+
+The Svix server exposes a REST API under `/api/v1/` for managing applications, endpoints, messages, and delivery attempts. The core modules are: `application`, `endpoint`, `message`, `attempt`, `event_type`, `auth`, `health`, and `admin`.
+
+All API calls require a JWT passed as `Authorization: Bearer <token>`. You can generate tokens with the `svix-server jwt generate` CLI command.
+
+The server supports multiple interchangeable backends for queuing and caching, so you can tune the deployment to your infrastructure without changing application code.
+
+Key CLI operations available on the server binary:
+
+- `jwt generate` — generate a signed JWT for API access
+- `asymmetric-key generate` — generate an asymmetric signing key
+- `migrate` — run database migrations
+- `prune` — remove old messages from the database
+- `wipe` — wipe all data for an organization
+- `healthcheck` — check that the server and its dependencies are reachable
+
+## PostgreSQL database
+
+PostgreSQL is the primary data store for the Svix server. It holds all persistent state: applications, endpoints, messages, message attempts, and event types.
+
+Before starting the server for the first time, run migrations to initialize the schema (needs confirmation):
+
+```bash
+svix-server migrate
+```
+
+The `prune` command lets you remove old message records to keep the database size manageable.
+
+## Queue backends: Redis, RabbitMQ, in-memory
+
+The server uses a task queue to dispatch webhook delivery jobs. Three backends are supported:
+
+- **Redis** — recommended for production; durable and horizontally scalable.
+- **RabbitMQ** — an alternative message broker for environments that already run RabbitMQ.
+- **In-memory** — suitable for development and testing only; messages are lost if the process restarts.
+
+The queue backend drives message retry logic. When a delivery attempt fails, the server re-enqueues the task according to configurable retry timeouts.
+
+## Cache backends: Redis, memory, none
+
+The server uses a cache layer to reduce database load for frequently accessed data. Three options are available:
+
+- **Redis** — shared cache across multiple server instances; recommended when running more than one replica.
+- **Memory** — process-local cache; works for single-instance deployments.
+- **None** — disables caching entirely; every request hits the database.
+
+The cache is used internally by the message dispatch path, as seen in the `message.rs` module which imports `crate::core::cache::Cache`.
+
+## OpenTelemetry and observability
+
+The Svix server supports OpenTelemetry for distributed tracing and metrics. You can point it at any OpenTelemetry-compatible collector to gain visibility into request latency, queue depth, and delivery outcomes.
+
+The `GET /api/v1/health` endpoint provides a liveness check you can wire into load balancers or container orchestration health probes.
+
+## Graceful shutdown
+
+The server handles `SIGTERM` and `Ctrl+C` to shut down gracefully. In-flight requests are allowed to complete before the process exits, so you can safely restart or redeploy without dropping active webhook deliveries.
+
+## OpenAPI spec generation
+
+The server's REST API is described by an OpenAPI specification at `server/openapi.json`. You can regenerate this file using the `generate-openapi.sh` script included in the repository.
+
+The spec covers all public endpoints including application management, endpoint configuration, message sending, attempt retrieval, authentication, and health checks. Use it to generate client code or import the API into tools like Postman or Stoplight.

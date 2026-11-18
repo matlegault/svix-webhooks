@@ -1,0 +1,182 @@
+---
+title: "Handling Errors & Rate Limits"
+---
+
+This guide explains how to identify API errors, read error responses, and retry requests safely using idempotency keys.
+
+## HTTP error codes returned by the API
+
+The Svix API uses standard HTTP status codes to signal the outcome of every request. The codes you will encounter most often are (needs confirmation):
+
+- `400` Bad Request: the request body or parameters are malformed.
+- `401` Unauthorized: no token was supplied or the token is invalid.
+- `403` Forbidden: the token is valid but does not have permission for the requested resource.
+- `404` Not Found: the application, endpoint, or other resource does not exist.
+- `409` Conflict: a resource with the same identifier already exists.
+- `422` Unprocessable Entity: the request was well-formed but failed validation.
+- `429` Too Many Requests: you have exceeded the rate limit.
+- `5xx` Server Error: something went wrong on the Svix side; safe to retry.
+
+## Error response body structure
+
+When the API returns an error, the response body is a JSON object. The Python SDK models this as `HttpError`, and validation failures produce an `HTTPValidationError`.
+
+A typical error body looks like this:
+
+```json
+{
+  "code": "not_found",
+  "detail": "Application not found."
+}
+```
+
+Validation errors (422) include an additional `detail` array that lists each field that failed.
+
+## Validation errors (422)
+
+A `422` response means the server understood your request but one or more fields did not pass validation. The Python SDK exposes this as `HTTPValidationError`.
+
+The `detail` array in the response body tells you exactly which fields failed and why. Check each item for the field path and the error message, fix the offending fields, and resend the request.
+
+## Authentication errors (401/403)
+
+All API calls require a JWT passed as `Authorization: Bearer <token>`. A `401` means the token is missing or cannot be verified. A `403` means the token is valid but lacks permission for the resource you requested.
+
+If you receive a `401`, check that:
+
+- You are including the `Authorization: Bearer <token>` header on every request.
+- The token was generated with `svix-server jwt generate` or from the dashboard and has not expired.
+
+If you receive a `403`, verify that the token has the correct scope for the operation you are attempting.
+
+## Rate limiting (429)
+
+When you exceed the rate limit, the API returns `429 Too Many Requests`. Back off before retrying. The Ruby HTTP client includes automatic retries with exponential backoff for network errors.
+
+A safe retry strategy is:
+
+1. Detect the `429` status code. (needs confirmation)
+2. Wait before retrying, increasing the wait time on each successive failure. (needs confirmation)
+3. Use an idempotency key (see below) so that retried requests do not create duplicate resources.
+
+## SDK exception types per language
+
+Each official SDK wraps API errors in a language-native exception type. Use these to catch and inspect errors in your code. (needs confirmation)
+
+- **TypeScript/JavaScript**: `ApiException`
+- **Python**: `HttpError`, `HTTPValidationError`
+- **Java**: `com.svix.exceptions.ApiException` (imported in every API class)
+- **Ruby**: `Svix::ApiError`
+- **PHP**: `Svix\Exception\ApiException`
+
+The Java SDK methods declare both `IOException` and `ApiException` in their `throws` clause, so you need to handle both.
+
+Here is a short example in each language (needs confirmation):
+
+**TypeScript**
+```typescript
+import { Svix, ApiException } from "svix";
+
+const svix = new Svix("YOUR_API_KEY");
+try {
+  const app = await svix.application.get("app_id");
+} catch (e) {
+  if (e instanceof ApiException) {
+    console.error(e.statusCode, e.message);
+  }
+}
+```
+
+
+**Python**
+```python
+from svix.api.errors import HttpError, HTTPValidationError
+from svix import Svix
+
+svix = Svix("YOUR_API_KEY")
+try:
+    app = svix.application.get("app_id")
+except HTTPValidationError as e:
+    print("Validation failed:", e)
+except HttpError as e:
+    print("API error:", e)
+```
+
+
+**Java**
+```java
+import com.svix.exceptions.ApiException;
+
+try {
+    EndpointOut ep = svix.getEndpoint().get(appId, endpointId);
+} catch (ApiException e) {
+    System.err.println("Status: " + e.getStatusCode());
+} catch (IOException e) {
+    System.err.println("Network error: " + e.getMessage());
+}
+```
+
+
+**Ruby**
+```ruby
+begin
+  ep = svix.endpoint.get(app_id, endpoint_id)
+rescue Svix::ApiError => e
+  puts "API error: #{e.message}"
+end
+```
+
+
+**PHP**
+```php
+use Svix\Exception\ApiException;
+
+try {
+    $ep = $svix->endpoint->get($appId, $endpointId);
+} catch (ApiException $e) {
+    echo "API error: " . $e->getMessage();
+}
+```
+
+
+## Idempotency keys for safe retries
+
+Mutating API operations such as creating an endpoint or sending a message accept an `idempotency-key` header. When you supply the same key on a retry, the server returns the original response instead of creating a duplicate resource.
+
+The SDKs expose this through an options object on the relevant methods. For example, in TypeScript:
+
+```typescript
+const ep = await svix.endpoint.create(
+  appId,
+  { url: "https://example.com/webhook" },
+  { idempotencyKey: "unique-key-for-this-request" }
+);
+```
+
+
+In Java, pass an `EndpointCreateOptions` object:
+
+```java
+EndpointCreateOptions opts = new EndpointCreateOptions();
+opts.idempotencyKey = "unique-key-for-this-request";
+EndpointOut ep = svix.getEndpoint().create(appId, endpointIn, opts);
+```
+
+
+In Ruby, pass the key in the options hash:
+
+```ruby
+ep = svix.endpoint.create(app_id, endpoint_in, { "idempotency-key" => "unique-key-for-this-request" })
+```
+
+
+In PHP, set it on the options object:
+
+```php
+$opts = new EndpointCreateOptions();
+$opts->idempotencyKey = "unique-key-for-this-request";
+$ep = $svix->endpoint->create($appId, $endpointIn, $opts);
+```
+
+
+Use a stable, unique value per logical operation, such as a UUID you generate before the first attempt and reuse on every retry. This makes your integration safe to retry on any network failure or `429` without risking duplicate data.
