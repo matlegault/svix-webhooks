@@ -6,16 +6,18 @@ This page is a reference for every configuration key available in Svix Bridge, c
 
 ## Configuration file format
 
-Bridge is configured through a YAML file. Each entry in the file defines a sender (queue → Svix) or receiver (webhook → queue). You set the backend-specific options directly on the entry alongside optional transformation and output settings.
+Bridge is configured with a YAML file. Each entry in the file defines a sender (queue → Svix) or receiver (Svix → queue). You set the backend-specific options directly on the entry alongside a `transformation` block and an output destination. (needs confirmation)
+
+The sections below list every key for each supported backend. (needs confirmation)
 
 ## Kafka: bootstrap brokers, group ID, topic, SASL, security protocol
 
-Kafka sender inputs use the following keys:
+The following keys configure a Kafka sender input.
 
 | Key | Required | Description |
-|-----|----------|-------------|
+|---|---|---|
 | `kafka_bootstrap_brokers` | Yes | Comma-separated list of broker addresses, e.g. `localhost:9094`. |
-| `kafka_group_id` | Yes | Consumer group ID used to track stream offset across restarts. |
+| `kafka_group_id` | Yes | Consumer group ID used to track the stream offset between restarts. |
 | `kafka_topic` | Yes | The topic to consume from. |
 | `kafka_transformation_input` | No | Input passed to JSON transformations. Values: `payload` (default) or `envelope`. |
 | `kafka_auto_offset_reset` | No | Maps to `auto.offset.reset`. Values: `latest` (default) or `earliest`. |
@@ -23,64 +25,159 @@ Kafka sender inputs use the following keys:
 | `kafka_security_protocol` | Yes | Security protocol. Values: `plaintext`, `ssl`, `sasl_ssl`. |
 | `kafka_debug_contexts` | No | Enables verbose rdkafka logging for the selected contexts. |
 
-For `sasl_ssl`, you also set SASL credentials. The supported `kafka_sasl_mechanism` values are `PLAIN`, `SCRAM-SHA-256`, and `SCRAM-SHA-512`.
+For `sasl_ssl`, you also supply SASL credentials. The supported `kafka_sasl_mechanism` values are `PLAIN`, `SCRAM-SHA-256`, and `SCRAM-SHA-512`.
 
-Messages are committed manually only after successful webhook delivery — Bridge does not use auto-commit.
+Messages are committed manually only after successful webhook delivery, so offset commits reflect actual delivery.
 
-Kafka output opts use `kafka_bootstrap_brokers`, `kafka_topic`, `kafka_security_protocol`, and optionally `kafka_debug_contexts`.
+A minimal Kafka sender entry looks like this:
+
+```yaml
+- name: my-kafka-sender
+  input:
+    type: kafka
+    kafka_bootstrap_brokers: "localhost:9094"
+    kafka_group_id: "my-consumer-group"
+    kafka_topic: "webhooks"
+    kafka_security_protocol: plaintext
+  output:
+    type: svix
+    token: YOUR_API_KEY
+```
 
 ## RabbitMQ: URI and queue name
 
-RabbitMQ inputs and outputs are configured with two keys:
+Configure a RabbitMQ sender with these two keys.
 
-| Key | Description |
-|-----|-------------|
-| `uri` | The AMQP connection URI for your RabbitMQ instance. |
-| `queue_name` | The name of the queue to consume from or publish to. |
+| Key | Required | Description |
+|---|---|---|
+| `uri` | Yes | The AMQP connection URI for your RabbitMQ instance. |
+| `queue_name` | Yes | The name of the queue to consume from. |
+
+```yaml
+- name: my-rabbitmq-sender
+  input:
+    type: rabbitmq
+    uri: "amqp://guest:guest@localhost:5672/%2F"
+    queue_name: "webhooks"
+  output:
+    type: svix
+    token: YOUR_API_KEY
+```
 
 ## Redis: DSN and queue key
 
-Redis inputs and outputs use these keys:
+Configure a Redis sender with these two keys.
 
-| Key | Description |
-|-----|-------------|
-| `dsn` | The Redis connection DSN. |
-| `queue_key` | The key identifying the queue in Redis. |
+| Key | Required | Description |
+|---|---|---|
+| `dsn` | Yes | The Redis connection DSN. |
+| `queue_key` | Yes | The Redis key used as the queue. |
 
-Redis only supports JSON-formatted transformations. If you configure a string-format transformation with a Redis backend, Bridge will return an error.
+**Note:** Redis only supports JSON-formatted transformations. If you configure a string-format transformation with a Redis input or output, Bridge will return an error.
+
+```yaml
+- name: my-redis-sender
+  input:
+    type: redis
+    dsn: "redis://localhost:6379"
+    queue_key: "webhooks"
+  output:
+    type: svix
+    token: YOUR_API_KEY
+```
 
 ## SQS: queue DSN
 
-SQS inputs and outputs are configured with a single key:
+Configure an SQS sender with a single key.
 
-| Key | Description |
-|-----|-------------|
-| `queue_dsn` | The SQS queue DSN, including region and queue name. |
+| Key | Required | Description |
+|---|---|---|
+| `queue_dsn` | Yes | The SQS queue URL. |
+
+```yaml
+- name: my-sqs-sender
+  input:
+    type: sqs
+    queue_dsn: "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue"
+  output:
+    type: svix
+    token: YOUR_API_KEY
+```
 
 ## GCP Pub/Sub: subscription ID and topic
 
-GCP Pub/Sub inputs and outputs use these keys:
+Configure a GCP Pub/Sub sender with these keys.
 
-| Key | Description |
-|-----|-------------|
-| `subscription_id` | The Pub/Sub subscription ID to consume from (input). |
-| `topic` | The Pub/Sub topic to publish to (output). |
+| Key | Required | Description |
+|---|---|---|
+| `subscription_id` | Yes | The Pub/Sub subscription ID to consume from. |
+| `topic` | Yes | The Pub/Sub topic name. |
+
+```yaml
+- name: my-pubsub-sender
+  input:
+    type: gcp_pubsub
+    subscription_id: "my-subscription"
+    topic: "my-topic"
+  output:
+    type: svix
+    token: YOUR_API_KEY
+```
 
 ## Transformation config key and JS engine selection
 
-You can attach an optional `transformation` key to any sender or receiver entry. The transformation contains a JavaScript snippet that Bridge runs on each message before forwarding it.
+You can attach an optional `transformation` block to any sender or receiver. The transformation runs a JavaScript function on each message before it is forwarded.
 
-Bridge supports two JavaScript execution engines: **Deno** and **QuickJS**. You select the engine with the `js_engine` config key. Valid values are `deno`, `quickjs`, or `both`. When you set `both`, Bridge runs the transformation in both engines in parallel, which is useful for validating that your scripts produce consistent results across engines.
+Bridge supports two JavaScript execution engines: **Deno** and **QuickJS**. You select the engine with the `js_engine` key. Setting it to `both` runs both engines in parallel, which is useful for validating that your scripts produce identical results across engines.
 
-String-format transformations work with all queue backends except Redis, which requires JSON-format transformations.
+```yaml
+- name: my-sender-with-transform
+  input:
+    type: sqs
+    queue_dsn: "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue"
+  transformation:
+    format: json
+    src: |
+      function handler(input) {
+        return {
+          appId: input.app_id,
+          message: {
+            eventType: input.event_type,
+            payload: input.data
+          }
+        };
+      }
+    js_engine: quickjs
+  output:
+    type: svix
+    token: YOUR_API_KEY
+```
+
+Valid values for `js_engine` are `deno`, `quickjs`, and `both`.
+
+Remember that Redis inputs and outputs only accept `format: json` transformations. String-format transformations work with all other backends.
 
 ## Webhook receiver and verification
 
-The webhook receiver listens for inbound HTTP POST requests at `POST /webhook/{integration_id}`. Each integration ID maps to a configured verifier and output destination.
+Bridge exposes an HTTP server that accepts inbound webhooks at `POST /webhook/{integration_id}`. Each receiver entry in your config maps an `integration_id` to a verification scheme and an output destination.
 
-You configure verification under the `verification` key of a receiver entry. Two schemes are supported:
+Two verification modes are available:
 
-- **Svix verification** — set `verification` to `svix` and provide an `endpoint_secret`. Bridge uses the Svix webhook library to validate the signature on each incoming request.
-- **No verification** — set `verification` to `none` to accept all incoming requests without signature checking.
+- **Svix verification** - validates the incoming request using a Svix endpoint secret. Set `verification` to `svix` and supply `endpoint_secret`.
+- **No verification** - accepts all incoming requests without checking signatures. Set `verification` to `none`.
 
-A `GET /health` endpoint is also available for liveness checks.
+```yaml
+- name: my-webhook-receiver
+  input:
+    type: webhook
+    path_id: my-integration
+    verification:
+      type: svix
+      endpoint_secret: "whsec_YOUR_ENDPOINT_SECRET"
+  output:
+    type: rabbitmq
+    uri: "amqp://guest:guest@localhost:5672/%2F"
+    queue_name: "incoming-webhooks"
+```
+
+A `GET /health` endpoint is also available to check that the Bridge process is running.

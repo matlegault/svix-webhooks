@@ -2,107 +2,103 @@
 title: "Verifying Incoming Webhooks"
 ---
 
-Verify that incoming webhook payloads were sent by Svix and have not been tampered with, using the official SDKs in all nine supported languages.
+Webhook verification lets your receiver confirm that every incoming request was genuinely sent by Svix and has not been tampered with.
 
 ## How verification works
 
-Every webhook Svix sends includes three headers that your receiver uses to verify the payload (needs confirmation):
+Every webhook Svix delivers is signed with HMAC-SHA256 using a secret tied to the specific endpoint. Three headers are attached to each request (needs confirmation):
 
-- `svix-id` - a unique message ID (needs confirmation)
-- `svix-timestamp` - a Unix timestamp (seconds) (needs confirmation)
-- `svix-signature` - one or more HMAC-SHA256 signatures, space-separated, each prefixed with `v1,` (needs confirmation)
+- `svix-id` - a unique message ID
+- `svix-timestamp` - a Unix timestamp (seconds)
+- `svix-signature` - one or more `v1,<base64>` signatures separated by spaces
 
-The signature is computed over the string `<msg-id>.<timestamp>.<payload>` using the endpoint's signing secret as the HMAC key.
+The signed string is `<msg-id>.<timestamp>.<payload>`. The SDK computes the expected signature and compares it against every signature in the header using a constant-time comparison.
 
-The SDKs also accept the unbranded header names `webhook-id`, `webhook-timestamp`, and `webhook-signature` as a fallback, so the same verification code works with any Standard Webhooks-compatible sender.
+Verification also enforces a **5-minute timestamp tolerance** by default. A message whose timestamp is more than 5 minutes old, or more than 5 minutes in the future, is rejected.
 
-By default, verification rejects messages whose timestamp is more than 5 minutes in the past or future. This prevents replay attacks.
+All SDKs accept both `svix-*` and `webhook-*` header names for backwards compatibility.
 
 ## Obtaining the endpoint secret
 
-Each endpoint has its own signing secret. You can find it in the Svix dashboard under the endpoint's details, or retrieve it via the API. The secret is a base64-encoded value prefixed with `whsec_`, for example `whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw`.
-
-Pass this full string (including the `whsec_` prefix) to the `Webhook` constructor in any SDK. The SDK strips the prefix and base64-decodes the key for you.
+Each endpoint has its own signing secret. You can find it in the Svix dashboard under the endpoint's settings, or retrieve it via the API. The secret is a base64-encoded string prefixed with `whsec_`. Pass it directly to the `Webhook` constructor in any SDK.
 
 ## Verifying in TypeScript/JavaScript
 
 ```typescript
 import { Webhook } from "svix";
 
-const secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
-
+const secret = "whsec_YOUR_ENDPOINT_SECRET";
 const wh = new Webhook(secret);
 
-// headers is the object of request headers, payload is the raw request body string
+// payload is the raw request body string or Buffer
+// headers is the request headers object
 try {
   wh.verify(payload, headers);
-  // Payload is authentic
+  // signature is valid
 } catch (err) {
-  // Verification failed
+  // WebhookVerificationError — reject the request
 }
 ```
 
-The `verify` method accepts `svix-*` or `webhook-*` header names and normalizes them to lowercase internally.
+The `verify` method accepts `svix-*` or `webhook-*` headers and normalises them internally.
 
 ## Verifying in Python
 
 ```python
 from svix.webhooks import Webhook, WebhookVerificationError
 
-secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
-
+secret = "whsec_YOUR_ENDPOINT_SECRET"
 wh = Webhook(secret)
 
 try:
     wh.verify(payload, headers)
-    # Payload is authentic
+    # signature is valid
 except WebhookVerificationError:
-    # Verification failed
+    # reject the request
+    pass
 ```
 
-The Python SDK maps `svix-id`, `svix-signature`, and `svix-timestamp` headers to their `webhook-*` equivalents before delegating to the Standard Webhooks library.
+Pass the raw request body as `bytes` or `str` and the headers as a plain `dict`. The SDK maps `svix-*` headers to the underlying `webhook-*` names before verifying.
 
 ## Verifying in Go
 
 ```go
 import "github.com/svix/svix-webhooks/go"
 
-secret := "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
-
-wh, err := svix.NewWebhook(secret)
+wh, err := svix.NewWebhook("whsec_YOUR_ENDPOINT_SECRET")
 if err != nil {
     // handle error
 }
 
-// r is an *http.Request
 err = wh.Verify(payload, r.Header)
 if err != nil {
-    // Verification failed
+    // reject the request
 }
-// Payload is authentic
 ```
 
-`NewWebhook` returns an error if the secret is empty or not valid base64. `Verify` enforces the 5-minute timestamp tolerance. If you need to skip the timestamp check (not recommended), use `VerifyIgnoringTimestamp` instead.
+`NewWebhook` strips the `whsec_` prefix and base64-decodes the secret automatically. `Verify` accepts a standard `http.Header` map.
+
+If you need to skip the timestamp check (not recommended), use `VerifyIgnoringTimestamp` instead.
 
 ## Verifying in Java / Kotlin
 
-**Java (Java 11+)**
+**Java**
 
 ```java
 import com.svix.Webhook;
 import com.svix.exceptions.WebhookVerificationException;
 
-Webhook wh = new Webhook("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw");
+Webhook wh = new Webhook("whsec_YOUR_ENDPOINT_SECRET");
 
 try {
-    wh.verify(payload, request.headers()); // java.net.http.HttpHeaders
-    // Payload is authentic
+    // Java 11+: pass HttpHeaders directly
+    wh.verify(payload, httpHeaders);
 } catch (WebhookVerificationException e) {
-    // Verification failed
+    // reject the request
 }
 ```
 
-The Java 11 variant accepts `java.net.http.HttpHeaders` directly.
+The Java 11 variant accepts `java.net.http.HttpHeaders` directly. Both Java 8 and Java 11 variants accept a `String` secret or a raw `byte[]`.
 
 **Kotlin**
 
@@ -110,17 +106,16 @@ The Java 11 variant accepts `java.net.http.HttpHeaders` directly.
 import com.svix.kotlin.Webhook
 import com.svix.kotlin.exceptions.WebhookVerificationException
 
-val wh = Webhook("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw")
+val wh = Webhook("whsec_YOUR_ENDPOINT_SECRET")
 
 try {
-    wh.verify(payload, headers) // java.net.http.HttpHeaders
-    // Payload is authentic
+    wh.verify(payload, httpHeaders)
 } catch (e: WebhookVerificationException) {
-    // Verification failed
+    // reject the request
 }
 ```
 
-The Kotlin SDK checks both `svix-*` and `webhook-*` header names, and enforces a 5-minute timestamp tolerance.
+The Kotlin SDK accepts `java.net.http.HttpHeaders` and enforces the same 5-minute tolerance.
 
 ## Verifying in C#, Ruby, PHP, Rust
 
@@ -129,14 +124,8 @@ The Kotlin SDK checks both `svix-*` and `webhook-*` header names, and enforces a
 ```csharp
 using Svix;
 
-var wh = new Webhook("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw");
-
-try {
-    wh.Verify(payload, headers);
-    // Payload is authentic
-} catch {
-    // Verification failed
-}
+var wh = new Webhook("whsec_YOUR_ENDPOINT_SECRET");
+wh.Verify(payload, headers);
 ```
 
 
@@ -146,13 +135,12 @@ try {
 ```ruby
 require "svix"
 
-wh = Svix::Webhook.new("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw")
+wh = Svix::Webhook.new("whsec_YOUR_ENDPOINT_SECRET")
 
 begin
   wh.verify(payload, headers)
-  # Payload is authentic
 rescue Svix::WebhookVerificationError
-  # Verification failed
+  # reject the request
 end
 ```
 
@@ -164,13 +152,12 @@ end
 use Svix\Webhook;
 use Svix\Exception\WebhookVerificationException;
 
-$wh = new Webhook("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw");
+$wh = new Webhook("whsec_YOUR_ENDPOINT_SECRET");
 
 try {
     $wh->verify($payload, $headers);
-    // Payload is authentic
 } catch (WebhookVerificationException $e) {
-    // Verification failed
+    // reject the request
 }
 ```
 
@@ -181,24 +168,22 @@ try {
 ```rust
 use svix::webhooks::Webhook;
 
-let wh = Webhook::new("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw")?;
-
-match wh.verify(payload, &headers) {
-    Ok(_) => { /* Payload is authentic */ }
-    Err(e) => { /* Verification failed */ }
-}
+let wh = Webhook::new("whsec_YOUR_ENDPOINT_SECRET")?;
+wh.verify(payload.as_bytes(), &headers)?;
 ```
 
 
 
 ## Handling verification errors
 
-All SDKs raise a language-appropriate error when verification fails. Common causes are (needs confirmation):
+When `verify` fails it raises or returns an error. The specific type depends on the language (needs confirmation):
 
-- Missing or malformed `svix-id`, `svix-signature`, or `svix-timestamp` headers - the SDK returns a "missing required headers" or "invalid headers" error.
-- Timestamp outside the 5-minute window - the SDK returns a "message timestamp too old" or "message timestamp too new" error.
-- Signature mismatch - the SDK returns a "no matching signature found" error, which usually means the wrong secret is configured or the raw body was modified before verification.
+- **Go**: one of `errRequiredHeaders`, `errNoMatchingSignature`, `errMessageTooOld`, `errMessageTooNew`, or `errInvalidHeaders`
+- **Python**: `WebhookVerificationError` (re-exported from `svix.webhooks`)
+- **TypeScript/JavaScript**: `WebhookVerificationError` (re-exported from the `standardwebhooks` library)
+- **Java**: `WebhookVerificationException`
+- **Kotlin**: `WebhookVerificationException`
+- **Ruby**: `Svix::WebhookVerificationError`
+- **PHP**: `WebhookVerificationException`
 
-Always pass the **raw, unparsed request body** to `verify`. Parsing the body as JSON and re-serializing it before verification will change the byte sequence and cause a signature mismatch. (needs confirmation)
-
-When verification fails, respond with an HTTP `400` status and do not process the payload. (needs confirmation)
+Always respond with an HTTP `400` or `401` when verification fails so the sender knows the request was rejected. Never process the payload before verification succeeds. (needs confirmation)

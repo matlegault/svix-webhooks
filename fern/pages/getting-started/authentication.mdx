@@ -49,27 +49,28 @@ The server defaults to **HS256** (HMAC-SHA256) for signing JWTs. The following a
 
 
 
-Choose a symmetric algorithm (HS*) when you control both the token issuer and the server. Use an asymmetric algorithm (RS* or EdDSA) when you need to verify tokens with a public key without sharing the signing secret.
+Choose an asymmetric algorithm (RS256, RS384, RS512, or EdDSA) when you need to verify tokens outside the server without sharing a secret. The server also provides an `asymmetric-key generate` CLI command to create the required key pair.
 
 ## Configuring jwt_secret on the server
 
-Set `jwt_secret` in your server configuration before starting the server. Every token you generate must be signed with this secret, and the server rejects tokens signed with any other value. (needs confirmation)
+Set `jwt_secret` in your server configuration before starting Svix. All tokens must be signed with this secret (or the corresponding private key for asymmetric algorithms). If you change `jwt_secret`, any previously issued tokens become invalid immediately.
+
+A minimal configuration example:
 
 ```toml
-# svix-server configuration
-jwt_secret = "YOUR_JWT_SECRET"
+jwt_secret = "your-secret-value-here"
 ```
 
-For asymmetric algorithms, set the corresponding key material in place of a shared secret. The `svix-server asymmetric-key generate` command can produce a compatible key pair.
+For asymmetric algorithms, point the configuration at your private key file instead of a shared secret.
 
 ## Regional endpoints and token prefixes
 
-When using Svix Cloud, tokens are scoped to a specific regional endpoint. Use the token that matches the region your organization was provisioned in. Sending a token to the wrong regional endpoint will result in an authentication failure.
+Svix operates regional API endpoints. When you use the managed cloud service, your token is tied to the region where your organization was created. Point your SDK or HTTP client at the correct regional base URL to match your token.
 
-The CLI stores your active server URL and token in `~/.config/svix/config.toml`. You can override these at runtime with environment variables using the `SVIX_` prefix.
+When self-hosting, your base URL is whatever you expose for the Svix server, and the same token works across all endpoints on that server.
 
 ## Token expiry and rotation
 
-JWTs issued by `svix-server jwt generate` include an expiry claim. When a token expires, requests return an authentication error and you must generate a new token.
+JWTs issued by `svix-server jwt generate` carry an expiry claim. Once a token expires, requests made with it are rejected. To rotate a token, generate a new one with the CLI or dashboard and update your application to use it.
 
-To rotate a token, generate a new one and update every client that uses the old token. There is no server-side token revocation list, so the old token remains valid until its expiry time passes. Plan rotations around your token lifetime to avoid a gap in access.
+If you suspect a token has been compromised, change your `jwt_secret` on the server. This invalidates all outstanding tokens at once, so be prepared to reissue tokens for every service that calls the API.

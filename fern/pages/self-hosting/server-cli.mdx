@@ -6,13 +6,13 @@ Reference for every `svix-server` CLI command covering JWT generation, key manag
 
 ## jwt generate
 
-Use `jwt generate` to create a signed JWT for authenticating API calls against the server. The server validates JWTs signed with the configured `jwt_secret`, supporting HS256 by default as well as HS384, HS512, RS256, RS384, RS512, and EdDSA.
+Use `jwt generate` to create a signed JWT for authenticating API requests. The server validates JWTs signed with the `jwt_secret` configured in your server config. Supported algorithms are HS256 (default), HS384, HS512, RS256, RS384, RS512, and EdDSA.
 
 ```bash
 svix-server jwt generate
 ```
 
-The command prints a token to stdout. Pass it as a Bearer token on every API request (needs confirmation):
+The command prints a token to stdout. Pass it as a Bearer token on every API call (needs confirmation):
 
 ```
 Authorization: Bearer <token>
@@ -22,27 +22,27 @@ Authorization: Bearer <token>
 
 ## asymmetric-key generate
 
-Use `asymmetric-key generate` to create an asymmetric signing key pair. Asymmetric keys let webhook consumers verify signatures without sharing a secret.
+Use `asymmetric-key generate` to create an asymmetric signing key pair. Asymmetric keys let webhook consumers verify payloads without sharing a secret.
 
 ```bash
 svix-server asymmetric-key generate
 ```
 
-The command outputs the generated key material to stdout.
+The command outputs the generated key material to stdout. Store the private key securely and distribute only the public key to consumers.
 
 ## migrate
 
-Use `migrate` to run pending database migrations against the configured PostgreSQL instance. Run this command before starting the server for the first time and after each upgrade.
+Use `migrate` to apply pending database migrations against your PostgreSQL instance. Run this command before starting the server for the first time and after every upgrade.
 
 ```bash
 svix-server migrate
 ```
 
-
+The server uses PostgreSQL as its database backend.
 
 ## prune
 
-Use `prune` to delete old message and attempt data from the database. This keeps the database size manageable over time.
+Use `prune` to delete old message and attempt data from the database. This keeps your database size manageable over time.
 
 ```bash
 svix-server prune
@@ -52,7 +52,7 @@ svix-server prune
 
 ## wipe
 
-Use `wipe` to remove all data for an organization from the database. This is a destructive operation and cannot be undone.
+Use `wipe` to remove all data for an organization from the database. This is a destructive, irreversible operation.
 
 ```bash
 svix-server wipe
@@ -62,7 +62,7 @@ svix-server wipe
 
 ## healthcheck
 
-Use `healthcheck` to verify that the server and its dependencies are reachable and healthy. This corresponds to the `GET /api/v1/health` REST endpoint.
+Use `healthcheck` to verify that the server and its dependencies are reachable and healthy. The server also exposes a `GET /api/v1/health` HTTP endpoint for the same purpose.
 
 ```bash
 svix-server healthcheck
@@ -72,6 +72,6 @@ svix-server healthcheck
 
 ## Exit codes and output formats
 
-The CLI commands write their primary output to stdout. Errors are written to stderr.
+All commands write their primary output to stdout. Errors are written to stderr. A zero exit code indicates success; a non-zero exit code indicates failure.
 
-The server supports graceful shutdown via SIGTERM or Ctrl+C, which applies when the server process is running rather than when invoking one-shot CLI commands.
+The server supports graceful shutdown via SIGTERM or Ctrl+C, which lets in-flight operations complete before the process exits.

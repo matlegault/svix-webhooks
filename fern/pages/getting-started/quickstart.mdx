@@ -12,7 +12,7 @@ If you are using the self-hosted server, generate a token with `svix-server jwt 
 
 ## Install an SDK or get your API token
 
-Svix provides officially supported SDKs for nine languages. Install the one that matches your stack:
+Svix provides official SDKs for nine languages. Install the one that matches your stack:
 
 <CodeBlocks>
 ```bash Python
@@ -34,24 +34,24 @@ composer require svix/svix
 
 The Go module path is `github.com/svix/svix-webhooks/v2` and requires Go 1.21 or later.
 
-The PHP package requires PHP >= 8.1 and `guzzlehttp/guzzle` ^7.0 or ^8.0.
+The PHP package requires PHP 8.1 or later and `guzzlehttp/guzzle` 7.x or 8.x.
 
-If you prefer plain HTTP, every example below maps directly to a REST call. Set your token once (needs confirmation):
+If you prefer to call the REST API directly, set your token in an environment variable (needs confirmation):
 
 ```bash
-export SVIX_TOKEN="YOUR_API_KEY"
+export SVIX_AUTH_TOKEN="YOUR_API_KEY"
 ```
 
 ## Create an application
 
-An application represents one of your customers. Create one before sending any messages. (needs confirmation)
+An application represents one of your customers. Create one before you can send any webhooks. (needs confirmation)
 
 <CodeBlocks>
 ```python Python
 from svix import Svix, ApplicationIn
 
 svix = Svix("YOUR_API_KEY")
-app = svix.application.create(ApplicationIn(name="my-customer"))
+app = svix.application.create(ApplicationIn(name="My First App"))
 print(app.id)
 ```
 
@@ -59,7 +59,7 @@ print(app.id)
 import { Svix, ApplicationIn } from "svix";
 
 const svix = new Svix("YOUR_API_KEY");
-const app = await svix.application.create({ name: "my-customer" });
+const app = await svix.application.create({ name: "My First App" });
 console.log(app.id);
 ```
 
@@ -68,7 +68,7 @@ import svix "github.com/svix/svix-webhooks/v2/go"
 
 client := svix.New("YOUR_API_KEY", nil)
 app, err := client.Application.Create(ctx, &svix.ApplicationIn{
-    Name: "my-customer",
+    Name: "My First App",
 })
 fmt.Println(app.Id)
 ```
@@ -77,15 +77,15 @@ fmt.Println(app.Id)
 curl -X POST https://api.svix.com/api/v1/app/ \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"name": "my-customer"}'
+  -d '{"name": "My First App"}'
 ```
 </CodeBlocks>
 
-Save the returned `id` — you will use it as `appId` in the next steps.
+Save the returned `id` — you will use it as `app_id` in the next steps.
 
 ## Register an endpoint
 
-An endpoint is the destination URL that Svix delivers webhook messages to. Register one on the application you just created.
+An endpoint is the destination URL that will receive your webhooks. Register one on the application you just created. (needs confirmation)
 
 <CodeBlocks>
 ```python Python
@@ -124,7 +124,7 @@ When `secret` is omitted, Svix generates one automatically.
 
 ## Send a message
 
-A message is the webhook payload Svix delivers to all registered endpoints for an application. Provide an `eventType` and a `payload`. (needs confirmation)
+A message is the webhook payload you want to deliver. Pass the application ID, an event type, and a JSON payload. (needs confirmation)
 
 <CodeBlocks>
 ```python Python
@@ -143,15 +143,15 @@ print(message.id)
 ```typescript TypeScript
 const message = await svix.message.create(app.id, {
   eventType: "invoice.paid",
-  payload: { invoice_id: "inv_123", amount: 4200 },
+  payload: { invoiceId: "inv_123", amount: 4200 },
 });
 console.log(message.id);
 ```
 
 ```go Go
 payload := map[string]interface{}{
-    "invoice_id": "inv_123",
-    "amount":     4200,
+    "invoiceId": "inv_123",
+    "amount":    4200,
 }
 message, err := client.Message.Create(ctx, app.Id, &svix.MessageIn{
     EventType: "invoice.paid",
@@ -164,11 +164,11 @@ fmt.Println(message.Id)
 curl -X POST https://api.svix.com/api/v1/app/{app_id}/msg/ \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"eventType": "invoice.paid", "payload": {"invoice_id": "inv_123", "amount": 4200}}'
+  -d '{"eventType": "invoice.paid", "payload": {"invoiceId": "inv_123", "amount": 4200}}'
 ```
 </CodeBlocks>
 
-Svix handles delivery, retries, and signing automatically after this single call.
+Svix immediately attempts delivery to every endpoint registered on the application and retries automatically on failure.
 
 ## Inspect the delivery attempt
 
@@ -207,7 +207,7 @@ Each attempt record shows the HTTP status code returned by your endpoint and whe
 
 You have sent your first webhook. From here you can:
 
-- Verify incoming webhook signatures in your endpoint handler using the `Webhook` class available in every SDK.
-- Define event types to give your webhooks a structured schema.
-- Use AutoConfig tokens to let your customers register their own endpoints without touching your API.
-- Explore the full API reference at `api.svix.com` and general documentation at `docs.svix.com`.
+- Verify incoming webhook signatures using the `Webhook` class available in every SDK.
+- Explore event types to filter which events each endpoint receives.
+- Use AutoConfig tokens to let your customers register their own endpoints without exposing your API token.
+- Browse the full API reference at `https://api.svix.com` and general documentation at `https://docs.svix.com`.

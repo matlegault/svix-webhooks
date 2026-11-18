@@ -2,31 +2,44 @@
 title: "Using the C#, Ruby, PHP & Rust SDKs"
 ---
 
-Install and use the official Svix SDKs for .NET, Ruby, PHP, and Rust to send webhooks and verify incoming payloads.
+Install and use the C#, Ruby, PHP, and Rust official Svix SDKs to send webhooks and verify incoming payloads in your application.
 
 ## C#: NuGet install and SvixClient setup
 
-Install the Svix NuGet package into your .NET project, then create a `SvixClient` with your API token:
+Install the Svix NuGet package into your .NET project:
+
+```bash
+dotnet add package Svix
+```
+
+Then create a `SvixClient` with your API token:
 
 ```csharp
 using Svix;
 
-var client = new SvixClient("YOUR_API_KEY", new SvixOptions("https://api.svix.com"));
+var client = new SvixClient("YOUR_API_KEY");
 ```
 
-`SvixClient` is the entry point for all API operations. It exposes properties such as `Application`, `Endpoint`, `Message`, `MessageAttempt`, `EventType`, and `Destination`.
-
-Each resource method has both a synchronous and an `Async` variant. Options objects let you pass query parameters and headers such as `IdempotencyKey`. For example, `EndpointCreateOptions` accepts an `IdempotencyKey` property that is sent as the `idempotency-key` header.
+The `SvixClient` is the entry point for all API operations, including `Application`, `Endpoint`, `Message`, `MessageAttempt`, `EventType`, and `Destination`.
 
 ## C#: sending messages and verifying webhooks
 
-Create a message for an application:
+Create an application and send a message:
 
 ```csharp
-var msg = await client.Message.CreateAsync(
-    "app_id",
-    new MessageIn(eventType: "invoice.paid", payload: new { id = "evt_1", amount = 100 })
-);
+using Svix;
+using Svix.Models;
+
+var client = new SvixClient("YOUR_API_KEY");
+
+// Create an application (one per customer)
+var app = await client.Application.CreateAsync(new ApplicationIn(name: "my-customer"));
+
+// Send a message
+var msg = await client.Message.CreateAsync(app.Id, new MessageIn(
+    eventType: "invoice.paid",
+    payload: new { invoiceId = "inv_123", amount = 4200 }
+));
 ```
 
 To verify an incoming webhook payload, construct a `Webhook` with the endpoint secret and call `Verify`. The secret may be prefixed with `whsec_`:
@@ -35,64 +48,68 @@ To verify an incoming webhook payload, construct a `Webhook` with the endpoint s
 using Svix;
 
 var wh = new Webhook("whsec_YOUR_ENDPOINT_SECRET");
-wh.Verify(payload, headers.Get);
+
+// headers is a WebHeaderCollection from your HTTP framework
+wh.Verify(payload, headers);
 ```
 
-`Verify` accepts either a `WebHeaderCollection` or a `Func<string?, string?>` headers provider. It checks both branded (`svix-id`, `svix-signature`, `svix-timestamp`) and unbranded (`webhook-id`, `webhook-signature`, `webhook-timestamp`) header formats, and enforces a five-minute timestamp tolerance.
-
-If verification fails, a `WebhookVerificationException` is thrown. An empty or missing secret throws `EmptyWebhookSecretException`.
+`Verify` accepts both branded (`svix-id`, `svix-signature`, `svix-timestamp`) and unbranded (`webhook-id`, `webhook-signature`, `webhook-timestamp`) header formats. It throws `WebhookVerificationException` if the signature is invalid or the timestamp is outside the five-minute tolerance window.
 
 ## Ruby: gem install and Svix::Client setup
 
-Add the `svix` gem to your `Gemfile` and run `bundle install`, then create a client:
+Add the gem to your `Gemfile` or install it directly:
+
+```bash
+gem install svix
+```
+
+Create a client:
 
 ```ruby
 require "svix"
 
-svix = Svix::Client.new("YOUR_API_KEY")
+client = Svix::Client.new("YOUR_API_KEY")
 ```
 
-The client exposes resource accessors including `application`, `endpoint`, `message`, `message_attempt`, and `event_type`. Each resource method maps directly to an API operation.
-
-For example, list endpoints for an application:
+You can then call methods on `client.application`, `client.endpoint`, `client.message`, and other resources. For example, list endpoints for an application:
 
 ```ruby
-endpoints = svix.endpoint.list("app_id")
-```
-
-Create an endpoint with an idempotency key:
-
-```ruby
-ep = svix.endpoint.create(
-  "app_id",
-  { url: "https://example.com/webhook", version: 1 },
-  { "idempotency-key" => "unique-key-123" }
-)
+endpoints = client.endpoint.list("app_id_here")
 ```
 
 
 
 ## Ruby: webhook verification and error types
 
-Verify an incoming webhook with `Svix::Webhook`:
+Verify an incoming webhook by constructing a `Svix::Webhook` with the endpoint secret and calling `verify`:
 
 ```ruby
+require "svix"
+
 wh = Svix::Webhook.new("whsec_YOUR_ENDPOINT_SECRET")
+
+# headers is a Hash of request headers, payload is the raw request body string
 wh.verify(payload, headers)
 ```
 
-Verification uses HMAC-SHA256 and supports both `svix-*` and `webhook-*` header formats.
+The Ruby SDK raises the following error types you should handle:
 
-The Ruby SDK defines these error types you should handle:
+- `Svix::WebhookVerificationError` - raised when signature verification fails.
+- `Svix::WebhookSigningError` - raised when signing fails.
+- `Svix::EmptyWebhookSecretError` - raised when the secret is empty.
+- `Svix::ApiError` - raised for API-level errors.
 
-- `Svix::WebhookVerificationError` — raised when signature or timestamp validation fails.
-- `Svix::WebhookSigningError` — raised when signing fails.
-- `Svix::EmptyWebhookSecretError` — raised when the secret is missing or empty.
-- `Svix::ApiError` — raised for HTTP-level API errors.
+The HTTP client includes automatic retries with exponential backoff for network errors.
 
 ## PHP: Composer install and Svix setup
 
-Install the SDK via Composer (needs confirmation), then instantiate the client:
+Install the SDK via Composer:
+
+```bash
+composer require svix/svix
+```
+
+Create a client using `SvixOptions`:
 
 ```php
 use Svix\Svix;
@@ -101,29 +118,42 @@ use Svix\SvixOptions;
 $svix = new Svix("YOUR_API_KEY", new SvixOptions());
 ```
 
-`SvixOptions` lets you configure the server URL and other client settings. The client exposes resource objects for `Application`, `Endpoint`, `Message`, `MessageAttempt`, `EventType`, `Destination`, `Authentication`, and `Streaming`.
+You can then access resources such as `$svix->application`, `$svix->endpoint`, `$svix->message`, `$svix->eventType`, and `$svix->destination`.
 
-Verify an incoming webhook payload:
+## PHP: AutoConfig and WebhookVerificationException
+
+Use `AutoConfig` and `AutoConfigConsumer` to simplify endpoint registration for your webhook consumers.
+
+Verify an incoming webhook payload with the `Webhook` class:
 
 ```php
 use Svix\Webhook;
 use Svix\WebhookVerificationException;
 
 $wh = new Webhook("whsec_YOUR_ENDPOINT_SECRET");
-$wh->verify($payload, $headers);
+
+try {
+    // $headers is an associative array of request headers
+    $wh->verify($payload, $headers);
+} catch (WebhookVerificationException $e) {
+    // Signature invalid or timestamp out of tolerance
+    http_response_code(400);
+    exit();
+}
 ```
 
-
-
-## PHP: AutoConfig and WebhookVerificationException
-
-`AutoConfig` and `AutoConfigConsumer` simplify endpoint registration for your webhook consumers. They support both legacy (`svix-*`) and new (`webhook-*`) header formats.
-
-When verification fails, the SDK throws `WebhookVerificationException`. Signing errors throw `WebhookSigningException`. Catch these separately from the general `ApiException` to distinguish payload verification failures from API call failures.
+The PHP SDK supports both legacy (`svix-*`) and new (`webhook-*`) header formats. It also exposes `WebhookSigningException` for signing failures and `ApiException` for API-level errors.
 
 ## Rust: Cargo dependency and SvixOptions
 
-Add the `svix` crate to your `Cargo.toml` (needs confirmation), then build a client:
+Add the Svix crate to your `Cargo.toml`:
+
+```toml
+[dependencies]
+svix = "1"
+```
+
+Construct the client with `SvixOptions`:
 
 ```rust
 use svix::api::{Svix, SvixOptions};
@@ -131,31 +161,45 @@ use svix::api::{Svix, SvixOptions};
 let svix = Svix::new("YOUR_API_KEY".to_string(), None);
 ```
 
-Pass a `SvixOptions` value to customize the server URL:
-
-```rust
-let options = SvixOptions {
-    server_url: Some("https://api.svix.com".to_string()),
-    ..Default::default()
-};
-let svix = Svix::new("YOUR_API_KEY".to_string(), Some(options));
-```
-
-
+Pass a `SvixOptions` value as the second argument to configure a custom server URL or other options.
 
 ## Rust: async API and feature flags
 
-All Svix API methods in the Rust SDK are async. Access resources through methods on the `Svix` struct: `application()`, `endpoint()`, `message()`, `event_type()`, `destination()`, `authentication()`, `streaming()`, `ingest()`, `integration()`, and `connector()`.
+All Svix API methods are async. Access resources through methods on the `Svix` struct:
 
-Verify a webhook payload with `Webhook`:
+```rust
+use svix::api::{Svix, SvixOptions, ApplicationIn};
+
+#[tokio::main]
+async fn main() {
+    let svix = Svix::new("YOUR_API_KEY".to_string(), None);
+
+    let app = svix
+        .application()
+        .create(ApplicationIn { name: "my-customer".to_string(), ..Default::default() }, None)
+        .await
+        .unwrap();
+}
+```
+
+Available resource accessors include `application()`, `endpoint()`, `message()`, `event_type()`, `destination()`, `authentication()`, `streaming()`, `ingest()`, `integration()`, and `connector()`.
+
+To verify an incoming webhook, use the `Webhook` struct from `svix::webhooks`:
 
 ```rust
 use svix::webhooks::Webhook;
+use std::collections::HashMap;
 
-let wh = Webhook::new("whsec_YOUR_ENDPOINT_SECRET")?;
-wh.verify(payload.as_bytes(), &headers)?;
+let wh = Webhook::new("whsec_YOUR_ENDPOINT_SECRET").unwrap();
+wh.verify(payload.as_bytes(), &headers).unwrap();
 ```
 
-Verification supports both `svix-*` and `webhook-*` header names.
+Verification supports both branded (`svix-*`) and unbranded (`webhook-*`) header names.
 
-Some message event subscription APIs are gated behind the `svix_beta` feature flag. Enable it in `Cargo.toml` to access those endpoints. `AutoConfig` and `AutoConfigConsumer` support both v1 (deprecated) and v2 token formats for simplified endpoint registration.
+Some message event subscription APIs are gated behind the `svix_beta` feature flag. Enable it in `Cargo.toml` if you need those endpoints (needs confirmation):
+
+```toml
+[dependencies]
+svix = { version = "1", features = ["svix_beta"] }
+```
+

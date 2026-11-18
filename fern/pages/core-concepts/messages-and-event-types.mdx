@@ -6,26 +6,24 @@ Messages are the webhook payloads Svix delivers to your endpoints, and event typ
 
 ## What is a message?
 
-A message is a single webhook payload that Svix delivers to all matching endpoints registered under an application. When you send a message, Svix queues it, attempts delivery to each endpoint, and retries on failure — you make one API call and Svix handles the rest.
-
-Each message belongs to exactly one application (one per customer). Endpoints within that application receive the message if their event type filters and channel filters match.
+A message is a single webhook payload that Svix delivers to one or more endpoints registered under an application. When you send a message, Svix queues it, attempts delivery to every matching endpoint, and retries on failure. Each message belongs to exactly one application and carries an event type that identifies what happened.
 
 ## Message payload structure
 
-You send a message by posting to `POST /api/v1/app/{app_id}/msg`. The request body is a `MessageIn` object with the following fields:
+You create a message by posting to `POST /api/v1/app/{app_id}/msg`. The request body is the `MessageIn` structure with these fields:
 
 | Field | Required | Description |
 |---|---|---|
-| `eventType` | Yes | The event type name for this message |
-| `payload` | Yes | A JSON object — must be an object, not an array or scalar |
-| `eventId` | No | Optional unique identifier (used for idempotency) |
-| `channels` | No | 1–5 free-form channel identifiers for endpoint filtering |
-| `payloadRetentionPeriod` | No | Days to retain the payload (5–90, default 90) |
-| `application` | No | Optionally create the application alongside the message |
+| `eventType` | Yes | The event type name for this message. |
+| `payload` | Yes | A JSON object — must be an object, not an array or scalar. |
+| `eventId` | No | Optional unique identifier (idempotency key) for the message. |
+| `channels` | No | 1–5 free-form strings that endpoints can filter by. |
+| `payloadRetentionPeriod` | No | Days to retain the payload (5–90, default 90). |
+| `application` | No | Optionally create the application alongside the message. |
 
-The `payload` field accepts the aliases `data` and `payload` in the JSON body, and it must be a JSON object — the server rejects any payload that does not start with `{`.
+The `payload` field accepts the aliases `data` and `payload` interchangeably, and it must be a JSON object.
 
-A minimal message request looks like this:
+A minimal message creation request looks like this:
 
 ```json
 {
@@ -37,36 +35,25 @@ A minimal message request looks like this:
 }
 ```
 
-Channels let you further segment delivery within an application. A message can carry up to 5 channels, and an endpoint can filter on up to 10 channels. Only endpoints whose channel filter overlaps with the message's channels receive it.
+Channels let you further segment delivery. An endpoint can subscribe to specific channels, and a message is only delivered to endpoints whose channel filter matches. A message can carry between 1 and 5 channels.
 
 ## Event types and schemas
 
-Every message carries an `eventType` — a string name such as `user.signup` or `invoice.paid`. Endpoints can subscribe to a specific set of event types; if an endpoint has no filter set, it receives all event types.
+An event type is a named category for messages, such as `user.signup` or `invoice.paid`. Endpoints can filter to receive only specific event types — the filter list must contain at least one item and is validated on creation.
 
-Event types are managed through the `event_type` endpoint module. You can define event types in advance to document the shape of your payloads and to give your customers a catalog of events they can subscribe to.
+Event types are managed through the `event_type` endpoint module.
 
-When an endpoint has an event type filter, the filter must contain at least one item — an empty filter set is rejected by the server.
+When you create an endpoint, you can pass a list of event type names to `filterTypes`. If you leave it empty, the endpoint receives all event types. The server validates that the list is non-empty when provided.
 
 ## Idempotency keys
 
-You can set the optional `eventId` field on a message to act as an idempotency key. If you send two messages with the same `eventId` for the same application, Svix treats the second request as a duplicate and does not deliver it twice.
+The `eventId` field on a message acts as an idempotency key. If you send two messages with the same `eventId` for the same application, Svix treats the second request as a duplicate and does not deliver it twice.
 
-This is useful when your producer might retry a send on network failure. Set `eventId` to a stable identifier derived from your own event — for example, a database row ID or a UUID you generate before sending. (needs confirmation)
-
-```json
-{
-  "eventId": "evt_2Cob4BaFzMsKwXnFqJlEfGhI",
-  "eventType": "invoice.paid",
-  "payload": {
-    "invoiceId": "inv_abc123",
-    "amount": 4900
-  }
-}
-```
+Use `eventId` whenever you need to guarantee exactly-once delivery from your side — for example, when retrying a failed API call to Svix. Set it to a stable identifier derived from the event itself, such as a database record ID combined with the event type. (needs confirmation)
 
 ## Message retention and pruning
 
-The `payloadRetentionPeriod` field controls how many days Svix stores the message payload. The value must be between 5 and 90 days, and defaults to 90.
+Each message has a `payloadRetentionPeriod` that controls how long Svix stores the raw payload. The value is in days and must be between 5 and 90; it defaults to 90.
 
 The server exposes a `prune` CLI command for removing old message data.
 
@@ -74,6 +61,6 @@ After the retention period expires, the payload content is no longer available, 
 
 ## Broadcast messages
 
-The `MessageIn` type supports an `application` field that lets you create an application and send a message in a single API call. If the application identified by the path's `app_id` already exists, the `application` field is ignored and the message is sent to the existing application.
+When you send a message to an application, Svix delivers it to every endpoint in that application whose event type and channel filters match. There is no need to address individual endpoints — the fan-out is automatic.
 
-This pattern is useful when you want to fan out a single event to many customers without pre-creating each application separately — you send one message per customer, letting Svix create the application on first use. (needs confirmation)
+You can also optionally create the application at the same time as the message by including an `application` object in the request body. If the application identified by the path parameter already exists, the `application` field is ignored.

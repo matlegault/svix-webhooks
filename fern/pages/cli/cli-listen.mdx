@@ -48,7 +48,7 @@ This shows status, HTTP status code, and timing for each attempt.
 
 ## Limitations and security considerations
 
-- The relay at `relay.svix.com` is an external service. Traffic between the relay and your machine travels over the open internet, so run your local server over HTTPS or trust your network accordingly (needs confirmation).
-- The relay URL is tied to your CLI session. Anyone with the URL can send requests to your local server while the tunnel is open, so treat it as a temporary development credential and do not share it. (needs confirmation)
-- `svix listen` is intended for local development only. For production, register a stable, publicly reachable endpoint URL directly in Svix instead of using the relay. (needs confirmation)
-- Configuration for the CLI, including authentication tokens, is stored at `~/.config/svix/config.toml` and can be overridden with `SVIX_*` environment variables.
+- The relay at `relay.svix.com` is an external service. Traffic between the relay and your machine travels over the open internet, so run your local server over HTTPS or trust your network accordingly.
+- The relay URL is tied to your CLI session. Anyone who obtains the relay URL can send requests to your local server for as long as the listener is running. Stop the listener when you are done.
+- `svix listen` is intended for local development and testing, not for production traffic.
+- CLI configuration, including your authentication token, is stored at `~/.config/svix/config.toml` and can be overridden with `SVIX_*` environment variables.
